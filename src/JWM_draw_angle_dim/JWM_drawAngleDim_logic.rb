@@ -59,7 +59,16 @@ module JWMPlugins
       # radius for drawn arc can be calculated by default or input via VCB
       @user_radius = -1
       @radius = 0
-
+##+++JWM
+    # Text size as a fraction of @radius - default, 0.1*
+        @text_scale = 0.1
+    # Dimension line scale as fraction of radius
+        @dim_line_scale = 1.05
+    # Arrowhead length as fraction of @radius
+        @arrow_scale = 0.05
+    # Arc segments for dimension arcs (per 90 degrees in later versions)
+        @arc_segments = 12
+##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
       @cursor = IN_CURSOR
@@ -136,6 +145,8 @@ module JWMPlugins
     def draw_angle_dim
       model = Sketchup.active_model
 
+##JWM note. It would be good to remember @radius for whole SU session, not just one use of the tool
+
       # make sure we are using the user's selected radius regardless of
       # which state this object was in when it was selected.
       if(@user_radius > 0)
@@ -160,30 +171,52 @@ module JWMPlugins
         reset
         return
       end
+##+++JWM
+      # scale the vectors to extend the radius a little.  This will affect
+      # the drawn edges.  The value is arbitrary - change @dim_line_scale in def initialize if another
+      # look is desired
+      vec1.length = @radius * @dim_line_scale
+      vec2.length = @radius * @dim_line_scale
 
       # the angle bisector vector - used for placing the text
       bisector = (vec1+vec2)
 
-      # scale the vectors to extend 1.5 the radius.  This will affect
-      # the drawn edges.  The value 1.5 is arbitrary - change it if another
-      # look is desired
-      vec1.length = @radius * 1.5
-      vec2.length = @radius * 1.5
+      # bisector length controls text placement - to centre text on arc, needs to be at radius
+      bisector.length = @radius
 
-      # bisector length controls text placement.  0.75 is arbitrary -
-      # change it if another look is desired
-      bisector.length = @radius * 0.75
+    # Draw an arrowhead component if there isn't one already
 
+    if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
+        jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
+        points = Array.new ;
+        points[0] = ORIGIN ; # "ORIGIN" is a SU provided constant
+        points[1] = [@arrow_scale*@radius, -0.4*@arrow_scale*@radius, 0]
+        points[2] = [@arrow_scale*@radius, 0.4*@arrow_scale*@radius, 0]
+        arrow_face = jwm_arrowhead.entities.add_face(points)
+        # If the  blue face is pointing up, reverse it.
+        arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+
+        # To add the component directly to the model, you have to define a transformation. We can define
+        # a transformation that does nothing to just get the job done.
+        # trans = Geom::Transformation.new  # an empty, default transformation.
+        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
+    end # if
+
+##---JWM
       # find the angle between the vectors and the normal to their plane
       # this calculation should not explode, since we trapped the case of
       # parallel above (angle = 0 or 180), but the calculation of the normal
       # will be numerically unstable when angle is very small or very close to
-      # 180.  I have tested at 0.1 degrees without problems.
+      # 180.  I (SLB) have tested at 0.1 degrees without problems.
       angle = vec1.angle_between vec2
       complement = 360.degrees - angle
 
       text = Sketchup.format_angle(angle) + "°"
       text2  = Sketchup.format_angle(complement) + "°"
+
+##+++JWM I'd like to change the name of this 'normal' to avoid confusion later with other 'normal' vectors
+##---JWM      perhaps to pick_plane_normal?
+
       normal = (vec1 * vec2).normalize
 
       # this enables undo of the whole operation as a unit
@@ -204,22 +237,132 @@ module JWMPlugins
       edge_pts[0] = @pts[1].offset vec1
       edge_pts[1] = @pts[1]
       edge_pts[2] = @pts[1].offset vec2
-      ents.add_edges edge_pts
+
+##+++JWM
+      #ents.add_edges edge_pts
+      ## Temporarily add edge for normal to dimension lines
+      edge_normal = []
+      edge_normal[0] = @pts[1]
+      edge_normal[1] = @pts[1].offset normal
+      model = Sketchup.active_model
+      modelents = model.entities
+      modelents.add_edges edge_normal
+      model_ents.add_cpoint edge_normal[1]
+##---JWM
 
       if(@inside)
         # interior angle mode
+
+##---JWM Main mods statt here
         # draw the arc across the angle at the selected radius
-        arc = ents.add_arc @pts[1], vec1, normal, @radius, 0, angle, 30
+        #arc = ents.add_arc @pts[1], vec1, normal, @radius, 0, angle, 30
 
-        # draw the text and leader line
-        # the leader connects to the center of the arc (it was drawn with 30 segments)
-        leader_point = arc[15].start.position
 
-        # note: the vector offset of the leader is 3D, which will cause the text to
-        # "float" and remain legible as the view is orbited.  I haven't found a way to
-        # lock the leader and text into the plane of the angle.
-        t = ents.add_text text,leader_point,bisector
-        t.leader_type = 1
+
+        ## Draw angle text in 3D text, inside a group, at the origin
+          ## Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean), letter_height, tolerance, z, is_filled (Boolean), extrusion
+          ## You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over, but it's hard to see what level to put it at, so zero for the moment.
+          text_group = ents.add_group
+          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, 0.1*@radius, 0.0, 0.0, true, 0.0
+          # Col(o)ur the text black (optionsl - can cause Z-fighting in display)
+          text_group.material = "black"
+
+          # Find the centre and width of the text group from its bounding box
+          text_bb_center = text_group.local_bounds.center
+          text_bb_width = text_group.local_bounds.width
+
+          ## Work out how to draw dimension arc in two parts to leave a gap for the dimension text
+          ## Might want to make the gap just a little bigger than text width, if text aligns with arc,
+          ## so try adding say 10%
+          half_gap_angle = 1.1*Math::atan(0.5*text_bb_width/@radius)
+          # puts half_gap_angle.to_s
+          # This would draw the arcs in place
+          #arc1 = ents.add_arc @pts[1], vec1, normal, @radius, (0.5*angle + half_gap_angle), angle, 12
+          #arc2 = ents.add_arc @pts[1], vec1, normal, @radius, 0, (0.5*angle - half_gap_angle),12
+
+        ## Draw the arcs, arrowheads and text all at the origin first,
+        ## then move all at once to dimensioned angle
+          # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
+          arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, (0.5*angle - half_gap_angle), @arc_segments
+          arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, (0.5*angle + half_gap_angle), angle, @arc_segments
+
+
+        # Insert an arrowhead at start and end of arcs
+        arrow1 = ents.add_instance jwm_arrowhead, arc1[0].start.position
+        arrow2 = ents.add_instance jwm_arrowhead, arc2[-1].end.position
+
+          ## Rotate the arrowheads to line up with start and end of arc
+          arrow1_rotn1 = 90.degrees
+          arrow2_rotn1 = -(90.degrees - angle)
+          # puts "angle = " + angle.radians.to_s
+          # puts "arrow2_rotn1 = " + arrow2_rotn1.radians.to_s
+          arrow1_rotate1 = Geom::Transformation.rotation arc1[0].start.position, Z_AXIS, arrow1_rotn1
+          arrow2_rotate1 = Geom::Transformation.rotation arc2[-1].end.position, Z_AXIS, arrow2_rotn1
+          arrow1.transform! arrow1_rotate1
+          arrow2.transform! arrow2_rotate1
+
+          # Put in angle delimiter lines at origin (temporarily - will use ones made 'in place' after testing further)
+          ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
+          ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
+
+          # Now move the center of the text to the center of the dimension arc ...
+          arc_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
+          #puts "arc_center = " + arc_center.to_s
+          #ents.add_cpoint arc_center
+
+
+        text_posn = arc_center.- text_bb_center
+        text_group.move! text_posn
+        # ... and rotate it in line with middle of arc
+        # puts "normal = " + normal.to_s
+          text_rotn1 = -(90.degrees - 0.5*angle)
+
+          #text_rotn2 = Z_AXIS.angle_between normal
+          text_rotate1 = Geom::Transformation.rotation arc_center, Z_AXIS , text_rotn1
+          #text_rotate2 = Geom::Transformation.rotation arc_center, vec2, 180.degrees - text_rotn2
+          text_group.transform! text_rotate1
+
+          ## Temporarily add normal vector to dimensions - up the Z_AXIS
+          ##ents.add_edges ORIGIN, [0,0,0.5*@radius]
+          ## ... and a cpoint at its end
+          ##ents.add_cpoint [0,0,0.5*@radius]
+
+##+++SLB
+          ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
+          ## so the dimension goes into the picked points the right way round
+#           dot = normal.dot Sketchup.active_model.active_view.camera.direction
+# 					ccw = dot > 0
+# 					if ccw
+# 						normal.reverse!
+# 						temp=vec1
+# 						vec1=vec2
+# 						vec2=temp
+# 					end
+##---SLB
+          ## Move whole dimension group to the angle vertex (@pts[1])
+          move_dims = Geom::Transformation.translation  @pts[1].to_a
+          group.transform! move_dims
+
+          ## First rotate the dimension group into the plane of the picked points
+          ## Calculate the normal between the plane of the three pick points (already named ‘normal') and
+          ##   the drawn dimension (still the Z_AXIS)
+          rotn_axis1 = normal.cross Z_AXIS
+          rotn_angle1 = normal.angle_between Z_AXIS
+          plane_rotate = Geom::Transformation.rotation @pts[1], rotn_axis1, -rotn_angle1
+          group.transform! plane_rotate
+
+          ## Next rotate about the normal vector to the picked plane, by the angle between the dimension group‘s
+          ##  transformed X direction and the original vec1. First set vec3 to the transformed position of the x- direction
+          vec3 = Geom::Vector3d.new [1, 0, 0]
+          vec3.transform! plane_rotate * move_dims
+          ## Now caclulate the angle:
+          rotn_angle2 = vec3.angle_between vec1
+          ## puts 'rotn_angle2 = ' + rotn_angle2.radians.to_s
+          group_rotate = Geom::Transformation.rotation @pts[1], normal, rotn_angle2
+          group.transform! group_rotate
+##---JWM
+
+
       else
         # exterior angle mode
         arc2 = ents.add_arc @pts[1], vec1, normal, @radius, 0,-complement, 30

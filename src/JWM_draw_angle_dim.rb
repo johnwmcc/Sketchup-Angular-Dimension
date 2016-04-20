@@ -22,8 +22,8 @@
 #                 this tool lets the inference engine assist you but doesn't
 #                 force you to click on existing model entities!
 #                 - The tool will draw two edges along the sides of the angle,
-#                 an arc across the angle, and a text with leader showing the
-#                 value of the angle.  The two edges make it easy to realign
+#                 two part-arcs across the angle, and a 3Dtext showing the
+#                 value of the angle in the gap.  The two edges make it easy to realign
 #                 the group with the original angle if the entity containing it is
 #                 subsequently moved or rotated.
 #                 - The primitive elements of each dimension are gathered into a Group
@@ -33,7 +33,7 @@
 #                 several with the same value!).
 #                 - Each Angular Dimension drawing is packaged in an operation, so that
 #                 undo and redo treat all of the elements as a single step.
-#                 - The default radius for the arc is half the distance between
+#                 - The default radius for the arc is the distance between
 #                 the first pick point and the vertex.  The user can override
 #                 the radius by typing in the VCB at any time. If a new radius is entered
 #                 before the first point is picked for the next angle, the prior
@@ -91,7 +91,6 @@ module JWMPlugins
   extension.copyright = '2016, steve@slbaumgartner.com.'
 
   Sketchup.register_extension extension, true
-puts "draw_angle_dim loaded"
 end # module
 
 
