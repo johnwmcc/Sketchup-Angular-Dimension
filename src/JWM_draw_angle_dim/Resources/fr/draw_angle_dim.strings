@@ -1,0 +1,16 @@
+# LanguageHandler added by Mario Chabot 2016. www.formation-sketchup.quebec
+# this file also.
+#######
+"Draw_angle_dim"="Cotation d'angle"
+"Create an angle dimension with"="Ajouter une dimension à un angle inclant";
+" arc and text in a new group."=" arc et texte dans un nouveau groupe";
+"Angular Dimension"="Cotation d'angle";
+"arc radius"="rayon de l'arc";
+"The selected lines are parallel, angle is 0 or 180"="Les lignes sélectionnées sont parallèlles, angle 0 ou 180";
+"You must select three distinct points!"="Cliquez trois points distincts!";
+"arc radius must be a positive number"="Le rayon de l'arc doit être positif";
+"please enter a number for arc radius"="Tapez un nombre pour le rayon de l'arc";
+"Point 1: first end of measured angle"="1er Point: première extrémité de l'angle";
+"Point 2: vertex of measured angle"="2e Point: vertex (coin) de l'angle";
+"Point 3: second end of measured angle"="3e Point: seconde extrémité de l'angle";
+"Point 3: last end of measured angle"="3e Point: dernière extrémité de l'angle";
