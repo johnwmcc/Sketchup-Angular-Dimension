@@ -15,6 +15,12 @@
 # rectangle.rb by @Last Software.
 # LanguageHandler added by Mario Chabot 2016. www.formation-sketchup.quebec
 #-----------------------------------------------------------------------------
+
+##++JWM Logic version history
+     #v4.02 - partially working
+     #v4.01 - SLB code adapted for namespace change to JWM - works except not finding Images and Resources
+     #        but works if those folders are placed in Plugins in a folder JWM_draw_angle_dim
+##---JWM
 module JWMPlugins
 
   class DrawAngleDimTool
