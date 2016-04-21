@@ -71,9 +71,11 @@ module JWMPlugins
     # Dimension line scale as fraction of radius
         @dim_line_scale = 1.05
     # Arrowhead length as fraction of @radius
-        @arrow_scale = 0.05
-    # Arc segments for dimension arcs (per 90 degrees in later versions)
-        @arc_segments = 12
+        @arrow_scale = 0.08
+    # Arc segments for dimension arcs
+        @arc_segments = 6
+    # Arrow style closed, open or line?
+      @arrow_style = "line"
 ##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
@@ -132,7 +134,9 @@ module JWMPlugins
         if(@user_radius > 0)
           @radius = @user_radius
         else
-          @radius = length/2.0
+##+++JWM
+          @radius = length # was length/2.0
+##---JWM
         end
       when 2
         # capture third point
@@ -190,17 +194,34 @@ module JWMPlugins
       # bisector length controls text placement - to centre text on arc, needs to be at radius
       bisector.length = @radius
 
+      model = Sketchup.active_model
+      modelents = model.entities
+      modelents.add_edges bisector
+       model_ents.add_cpoint bisector[1]
+
     # Draw an arrowhead component if there isn't one already
 
     if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
         jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
-        points = Array.new ;
-        points[0] = ORIGIN ; # "ORIGIN" is a SU provided constant
-        points[1] = [@arrow_scale*@radius, -0.4*@arrow_scale*@radius, 0]
-        points[2] = [@arrow_scale*@radius, 0.4*@arrow_scale*@radius, 0]
-        arrow_face = jwm_arrowhead.entities.add_face(points)
-        # If the  blue face is pointing up, reverse it.
-        arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+        arrow_points = Array.new ;
+        arrow_points[0] = [1.0, -0.3, 0]
+        arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+        arrow_points[2] = [1.0,  0.3, 0]
+        puts "arrrow_style = #{@arrow_style}"
+
+        case @arrow_stlye # Set in initialize as closed, open or line
+        when "closed"
+					arrow_face = jwm_arrowhead.entities.add_face(arrow_points)
+					# If the  blue face is pointing up, reverse it.
+					arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+        when "open"
+				  arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
+				else # "line"
+					arrow_points[0] = [0.5, -0.5, 0]
+					arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+					arrow_points[2] = [-0.5,  0.5, 0]
+					arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
+        end #case
 
         # To add the component directly to the model, you have to define a transformation. We can define
         # a transformation that does nothing to just get the job done.
@@ -219,9 +240,6 @@ module JWMPlugins
 
       text = Sketchup.format_angle(angle) + "°"
       text2  = Sketchup.format_angle(complement) + "°"
-
-##+++JWM I'd like to change the name of this 'normal' to avoid confusion later with other 'normal' vectors
-##---JWM      perhaps to pick_plane_normal?
 
       normal = (vec1 * vec2).normalize
 
@@ -246,14 +264,21 @@ module JWMPlugins
 
 ##+++JWM
       #ents.add_edges edge_pts
-      ## Temporarily add edge for normal to dimension lines
-      edge_normal = []
-      edge_normal[0] = @pts[1]
-      edge_normal[1] = @pts[1].offset normal
-      model = Sketchup.active_model
-      modelents = model.entities
-      modelents.add_edges edge_normal
-      model_ents.add_cpoint edge_normal[1]
+			# To see where the pick points were:
+# 				model = Sketchup.active_model
+# 				model_ents = model.entities
+# 				model_ents.add_cpoint @pts[0]
+# 				model_ents.add_cpoint @pts[2]
+
+
+#       #Temporarily add edge for normal to dimension lines
+#       edge_normal = []
+#       edge_normal[0] = @pts[1]
+#       edge_normal[1] = @pts[1].offset normal
+#       model = Sketchup.active_model
+#       modelents = model.entities
+#       modelents.add_edges edge_normal
+#       model_ents.add_cpoint edge_normal[1]
 ##---JWM
 
       if(@inside)
@@ -288,34 +313,36 @@ module JWMPlugins
 
         ## Draw the arcs, arrowheads and text all at the origin first,
         ## then move all at once to dimensioned angle
+        #  Draw the arcs, number of segments proportional to the angle but kept as a multiple of 4
           # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
           arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, (0.5*angle - half_gap_angle), @arc_segments
           arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, (0.5*angle + half_gap_angle), angle, @arc_segments
 
+        ## Have to calculate all the transforms first, to insert component instance in the right place
+        ## Scale the arrowheads to desired size
+          t_scale = Geom::Transformation.scaling @arrow_scale*@radius
+          # puts "arrow t_scale = #{@arrow_scale*@radius}"
+        ## Rotate the arrowheads to line up with start and end of arc
+          arrow1_rotn = 90.degrees
+          arrow2_rotn = -(90.degrees - angle)
+          arrow1_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow1_rotn
+          arrow2_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow2_rotn
+          arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
+          arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
-        # Insert an arrowhead at start and end of arcs
-        arrow1 = ents.add_instance jwm_arrowhead, arc1[0].start.position
-        arrow2 = ents.add_instance jwm_arrowhead, arc2[-1].end.position
 
-          ## Rotate the arrowheads to line up with start and end of arc
-          arrow1_rotn1 = 90.degrees
-          arrow2_rotn1 = -(90.degrees - angle)
-          # puts "angle = " + angle.radians.to_s
-          # puts "arrow2_rotn1 = " + arrow2_rotn1.radians.to_s
-          arrow1_rotate1 = Geom::Transformation.rotation arc1[0].start.position, Z_AXIS, arrow1_rotn1
-          arrow2_rotate1 = Geom::Transformation.rotation arc2[-1].end.position, Z_AXIS, arrow2_rotn1
-          arrow1.transform! arrow1_rotate1
-          arrow2.transform! arrow2_rotate1
+        # Combine transformations to insert an arrowhead at start and end of arcs
+          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*t_scale
+          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*t_scale
 
-          # Put in angle delimiter lines at origin (temporarily - will use ones made 'in place' after testing further)
+          # Put in angle delimiter lines at origin
           ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
           ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
 
           # Now move the center of the text to the center of the dimension arc ...
           arc_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
           #puts "arc_center = " + arc_center.to_s
-          #ents.add_cpoint arc_center
-
+          #ents.add_cpoint @pts[0]
 
         text_posn = arc_center.- text_bb_center
         text_group.move! text_posn
@@ -336,36 +363,75 @@ module JWMPlugins
 ##+++SLB
           ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
           ## so the dimension goes into the picked points the right way round
-#           dot = normal.dot Sketchup.active_model.active_view.camera.direction
-# 					ccw = dot > 0
-# 					if ccw
-# 						normal.reverse!
-# 						temp=vec1
-# 						vec1=vec2
-# 						vec2=temp
-# 					end
+					  dot = normal.dot Sketchup.active_model.active_view.camera.direction
+						ccw = dot > 0
+					 # puts "dot = #{dot}, ccw = #{ccw}"
+						if ccw
+							normal.reverse!
+							temp=vec1
+							vec1=vec2
+							vec2=temp
+						end
+
+           # Calculate overal transformation to move dimension group to picked vertex in correct orientation
+						# Unit vectors for where we want the x,y,z axes of the group drawn
+						#   at the origin to end up
+						newx = vec1.normalize
+						newz = normal
+						newy = newz.cross(newx).normalize
+
+						# use the normal vectors to build a transformation matrix
+						trans_array = []
+						trans_array[0] = newx[0]
+						trans_array[1] = newx[1]
+						trans_array[2] = newx[2]
+						trans_array[3] = 0.0
+						trans_array[4] = newy[0]
+						trans_array[5] = newy[1]
+						trans_array[6] = newy[2]
+						trans_array[7] = 0.0
+						trans_array[8] = newz[0]
+						trans_array[9] = newz[1]
+						trans_array[10] = newz[2]
+						trans_array[11] = 0.0
+						trans_array[12] = @pts[1][0]
+						trans_array[13] = @pts[1][1]
+						trans_array[14] = @pts[1][2]
+						trans_array[15] = 1.0
+
+						trans_from_array = Geom::Transformation.new trans_array
+						group.transform! trans_from_array
+
 ##---SLB
-          ## Move whole dimension group to the angle vertex (@pts[1])
-          move_dims = Geom::Transformation.translation  @pts[1].to_a
-          group.transform! move_dims
-
-          ## First rotate the dimension group into the plane of the picked points
-          ## Calculate the normal between the plane of the three pick points (already named ‘normal') and
-          ##   the drawn dimension (still the Z_AXIS)
-          rotn_axis1 = normal.cross Z_AXIS
-          rotn_angle1 = normal.angle_between Z_AXIS
-          plane_rotate = Geom::Transformation.rotation @pts[1], rotn_axis1, -rotn_angle1
-          group.transform! plane_rotate
-
-          ## Next rotate about the normal vector to the picked plane, by the angle between the dimension group‘s
-          ##  transformed X direction and the original vec1. First set vec3 to the transformed position of the x- direction
-          vec3 = Geom::Vector3d.new [1, 0, 0]
-          vec3.transform! plane_rotate * move_dims
-          ## Now caclulate the angle:
-          rotn_angle2 = vec3.angle_between vec1
-          ## puts 'rotn_angle2 = ' + rotn_angle2.radians.to_s
-          group_rotate = Geom::Transformation.rotation @pts[1], normal, rotn_angle2
-          group.transform! group_rotate
+#           Move whole dimension group to the angle vertex (@pts[1])
+#           move_dims = Geom::Transformation.translation  @pts[1].to_a
+#           group.transform! move_dims
+#
+#           First rotate the dimension group into the plane of the picked points
+#           Calculate the normal between the plane of the three pick points (already named ‘normal') and
+#             the drawn dimension (still the Z_AXIS)
+#           if !(normal.parallel? Z_AXIS)
+#             rotn_axis1 = normal.cross Z_AXIS
+#           else
+#             rotn_axis1 = normal
+#           end
+#           rotn_angle1 = normal.angle_between Z_AXIS
+#           plane_rotate = Geom::Transformation.rotation @pts[1], rotn_axis1, -rotn_angle1
+#           group.transform! plane_rotate
+#
+#           Next rotate about the normal vector to the picked plane, by the angle between the dimension group‘s
+#            transformed X direction and the original vec1. First set vec3 to the transformed position of the x- direction
+#           vec3 = Geom::Vector3d.new [1, 0, 0]
+#           vec3.transform! plane_rotate * move_dims
+#            Now caclulate the angle:
+#           rotn_angle2 = vec3.angle_between vec1
+#           puts 'rotn_angle2 = ' + rotn_angle2.radians.to_s
+#           if ccw
+#             group_rotate = Geom::Transformation.rotation @pts[1], normal, -rotn_angle2
+#           else
+#              group_rotate = Geom::Transformation.rotation @pts[1], normal, rotn_angle2
+#           end
+#           group.transform! group_rotate
 ##---JWM
 
 
