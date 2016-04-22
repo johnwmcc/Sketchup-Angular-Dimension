@@ -17,6 +17,8 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+     #v4.04 - partially working detection of direction of vertex, to rotate text if needed
+     #v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
      #v4.02 - partially working
      #v4.01 - SLB code adapted for namespace change to JWM - works except not finding Images and Resources
      #        but works if those folders are placed in Plugins in a folder JWM_draw_angle_dim
@@ -194,11 +196,6 @@ module JWMPlugins
       # bisector length controls text placement - to centre text on arc, needs to be at radius
       bisector.length = @radius
 
-      model = Sketchup.active_model
-      modelents = model.entities
-      modelents.add_edges bisector
-       model_ents.add_cpoint bisector[1]
-
     # Draw an arrowhead component if there isn't one already
 
     if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
@@ -207,7 +204,7 @@ module JWMPlugins
         arrow_points[0] = [1.0, -0.3, 0]
         arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
         arrow_points[2] = [1.0,  0.3, 0]
-        puts "arrrow_style = #{@arrow_style}"
+        #puts "arrrow_style = #{@arrow_style}"
 
         case @arrow_stlye # Set in initialize as closed, open or line
         when "closed"
@@ -265,8 +262,8 @@ module JWMPlugins
 ##+++JWM
       #ents.add_edges edge_pts
 			# To see where the pick points were:
-# 				model = Sketchup.active_model
-# 				model_ents = model.entities
+ 				model = Sketchup.active_model
+				model_ents = model.entities
 # 				model_ents.add_cpoint @pts[0]
 # 				model_ents.add_cpoint @pts[2]
 
@@ -279,6 +276,14 @@ module JWMPlugins
 #       modelents = model.entities
 #       modelents.add_edges edge_normal
 #       model_ents.add_cpoint edge_normal[1]
+
+       edge_bisector = []
+       edge_bisector[0] = @pts[1]
+       edge_bisector[1] = @pts[1].offset bisector
+
+      model_ents.add_edges edge_bisector.to_a
+      model_ents.add_cpoint edge_bisector[1].to_a
+
 ##---JWM
 
       if(@inside)
@@ -352,7 +357,6 @@ module JWMPlugins
 
           #text_rotn2 = Z_AXIS.angle_between normal
           text_rotate1 = Geom::Transformation.rotation arc_center, Z_AXIS , text_rotn1
-          #text_rotate2 = Geom::Transformation.rotation arc_center, vec2, 180.degrees - text_rotn2
           text_group.transform! text_rotate1
 
           ## Temporarily add normal vector to dimensions - up the Z_AXIS
@@ -363,7 +367,9 @@ module JWMPlugins
 ##+++SLB
           ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
           ## so the dimension goes into the picked points the right way round
-					  dot = normal.dot Sketchup.active_model.active_view.camera.direction
+            camera = Sketchup.active_model.active_view.camera
+					  view_dir = camera.direction
+					  dot = normal.dot view_dir
 						ccw = dot > 0
 					 # puts "dot = #{dot}, ccw = #{ccw}"
 						if ccw
@@ -372,7 +378,19 @@ module JWMPlugins
 							vec1=vec2
 							vec2=temp
 						end
+  ##+++JWM
+						# Check orientation of angle bisector relative to camera view.
 
+						camera_plane = [camera.yaxis.to_a, camera.xaxis]
+            # Project point at end of bisector onto camera x-y plane
+            point_a = bisector.to_a.project_to_plane camera_plane
+						# If bisector is pointing 'down' rotate dimension text 180 degreees
+            if point_a.y < 0
+							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
+							text_group.transform! text_rotate2
+            end
+
+  ##---JWM
            # Calculate overal transformation to move dimension group to picked vertex in correct orientation
 						# Unit vectors for where we want the x,y,z axes of the group drawn
 						#   at the origin to end up
