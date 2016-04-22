@@ -17,6 +17,7 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+     #v4.05 - now sensing direction of vertex relative to screen - using view.screen_coords, and rotating text 180 degrees if nec.
      #v4.04 - partially working detection of direction of vertex, to rotate text if needed
      #v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
      #v4.02 - partially working
@@ -77,7 +78,7 @@ module JWMPlugins
     # Arc segments for dimension arcs
         @arc_segments = 6
     # Arrow style closed, open or line?
-      @arrow_style = "line"
+      @arrow_style = "closed"
 ##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
@@ -204,20 +205,23 @@ module JWMPlugins
         arrow_points[0] = [1.0, -0.3, 0]
         arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
         arrow_points[2] = [1.0,  0.3, 0]
-        #puts "arrrow_style = #{@arrow_style}"
+        puts "arrrow_style = #{@arrow_style}"
 
-        case @arrow_stlye # Set in initialize as closed, open or line
+        case @arrow_style # Set in initialize as closed, open or line
+
         when "closed"
 					arrow_face = jwm_arrowhead.entities.add_face(arrow_points)
 					# If the  blue face is pointing up, reverse it.
 					arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
         when "open"
 				  arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
-				else # "line"
+				when "line"
 					arrow_points[0] = [0.5, -0.5, 0]
 					arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
 					arrow_points[2] = [-0.5,  0.5, 0]
 					arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
+			  else
+			    UI.messagebox "Sorry that #{@arrow_style} is not a valid arrow type. Please edit the script and set @arrow_style"
         end #case
 
         # To add the component directly to the model, you have to define a transformation. We can define
@@ -262,20 +266,30 @@ module JWMPlugins
 ##+++JWM
       #ents.add_edges edge_pts
 			# To see where the pick points were:
- 				model = Sketchup.active_model
-				model_ents = model.entities
+# 				model = Sketchup.active_model
+#				model_ents = model.entities
 # 				model_ents.add_cpoint @pts[0]
 # 				model_ents.add_cpoint @pts[2]
-
-
-#       #Temporarily add edge for normal to dimension lines
-#       edge_normal = []
-#       edge_normal[0] = @pts[1]
-#       edge_normal[1] = @pts[1].offset normal
-#       model = Sketchup.active_model
-#       modelents = model.entities
-#       modelents.add_edges edge_normal
-#       model_ents.add_cpoint edge_normal[1]
+#       angle_edges = model_ents.add_edges edge_pts
+#       if angle_edges
+#         face = angle_edges[0].common_face angle_edges[1]
+#         if face
+#           # find and display face normal
+#           face_normal = face.normal
+#           same = face_normal.normalize = normal.normalize
+#           puts "face.normal and picked plane normal same? = #{same}"
+#          model_ents.add_edges face.normal
+ #         model_ents.add_cpoint
+#        end
+#      end
+#       Temporarily add edge for normal to and bisector of dimension lines
+      edge_normal = []
+      edge_normal[0] = @pts[1]
+      edge_normal[1] = @pts[1].offset normal
+#      model = Sketchup.active_model
+#      modelents = model.entities
+#      modelents.add_edges edge_normal
+#      model_ents.add_cpoint edge_normal[1]
 
        edge_bisector = []
        edge_bisector[0] = @pts[1]
@@ -380,15 +394,35 @@ module JWMPlugins
 						end
   ##+++JWM
 						# Check orientation of angle bisector relative to camera view.
+						# Returned values are X from left to right (in pixels, approximately) and
+						#   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
+						view = Sketchup.active_model.active_view
+						pt_vertex = view.screen_coords @pts[1]
+						puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
+						pt_bisector = view.screen_coords edge_bisector[1]
+						puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
 
-						camera_plane = [camera.yaxis.to_a, camera.xaxis]
-            # Project point at end of bisector onto camera x-y plane
-            point_a = bisector.to_a.project_to_plane camera_plane
-						# If bisector is pointing 'down' rotate dimension text 180 degreees
-            if point_a.y < 0
-							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
+						# Now calculate which direction the bisector line appears to be
+						diff_x = (pt_bisector.x - pt_vertex.x)
+						diff_y = (pt_bisector.y - pt_vertex.y)
+						puts "diff_y = #{diff_y}"
+						if diff_y >= 0
+ 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
 							text_group.transform! text_rotate2
             end
+
+
+# This almost works, but not always
+# 						camera_plane = [camera.yaxis.to_a, camera.xaxis]
+# 						view = Sketchup.active_model.active_view
+#             # Project point at end of bisector onto camera x-y plane
+#             point_a = bisector.to_a.project_to_plane camera_plane
+#             model_ents.add_cpoint point_a
+# 						# If bisector is pointing 'down' rotate dimension text 180 degreees
+#             if point_a.y < 0
+# 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
+# 							text_group.transform! text_rotate2
+#             end
 
   ##---JWM
            # Calculate overal transformation to move dimension group to picked vertex in correct orientation
