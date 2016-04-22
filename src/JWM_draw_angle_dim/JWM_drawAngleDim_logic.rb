@@ -17,6 +17,8 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+     #v4.06 - senses screen orientation, and rotates text accordingly in 90 degree increments.
+     #          Removed text fill, which caused Z-fighting. Removed testing display of angle bisector
      #v4.05 - now sensing direction of vertex relative to screen - using view.screen_coords, and rotating text 180 degrees if nec.
      #v4.04 - partially working detection of direction of vertex, to rotate text if needed
      #v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
@@ -76,7 +78,7 @@ module JWMPlugins
     # Arrowhead length as fraction of @radius
         @arrow_scale = 0.08
     # Arc segments for dimension arcs
-        @arc_segments = 6
+        @arc_segments = 12
     # Arrow style closed, open or line?
       @arrow_style = "closed"
 ##---JWM
@@ -295,8 +297,8 @@ module JWMPlugins
        edge_bisector[0] = @pts[1]
        edge_bisector[1] = @pts[1].offset bisector
 
-      model_ents.add_edges edge_bisector.to_a
-      model_ents.add_cpoint edge_bisector[1].to_a
+      #model_ents.add_edges edge_bisector.to_a
+      #model_ents.add_cpoint edge_bisector[1].to_a
 
 ##---JWM
 
@@ -311,11 +313,12 @@ module JWMPlugins
 
         ## Draw angle text in 3D text, inside a group, at the origin
           ## Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean), letter_height, tolerance, z, is_filled (Boolean), extrusion
-          ## You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over, but it's hard to see what level to put it at, so zero for the moment.
+          ## You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
+          ##   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value seems to be ignored]
           text_group = ents.add_group
-          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, 0.1*@radius, 0.0, 0.0, true, 0.0
+          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0.0, false, 0.0
           # Col(o)ur the text black (optionsl - can cause Z-fighting in display)
-          text_group.material = "black"
+          #text_group.material = "black"
 
           # Find the centre and width of the text group from its bounding box
           text_bb_center = text_group.local_bounds.center
@@ -398,31 +401,33 @@ module JWMPlugins
 						#   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
 						view = Sketchup.active_model.active_view
 						pt_vertex = view.screen_coords @pts[1]
-						puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
+						#puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
 						pt_bisector = view.screen_coords edge_bisector[1]
-						puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
+						#puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
 
-						# Now calculate which direction the bisector line appears to be
+						# Now calculate which quadrant the bisector line appears to be in the current view, and
+						#   rotate text accordingly to keep it mostly upright
 						diff_x = (pt_bisector.x - pt_vertex.x)
 						diff_y = (pt_bisector.y - pt_vertex.y)
-						puts "diff_y = #{diff_y}"
-						if diff_y >= 0
+
+						if diff_y < 0 && diff_y.abs > diff_x.abs # bisector points in northerly quadrant (angle between +45  and +135 degrees)
+						    # no rotation required
+						end
+
+						if diff_y >= 0 && diff_y.abs > diff_x.abs # bisector points in southerly quadrant (angle between -45 and -135)
  							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
 							text_group.transform! text_rotate2
             end
 
+						if diff_x < 0 && diff_y.abs <= diff_x.abs # bisector points in westerly quadrant (angle between +135 and -135)
+ 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, -90.degrees
+							text_group.transform! text_rotate2
+            end
 
-# This almost works, but not always
-# 						camera_plane = [camera.yaxis.to_a, camera.xaxis]
-# 						view = Sketchup.active_model.active_view
-#             # Project point at end of bisector onto camera x-y plane
-#             point_a = bisector.to_a.project_to_plane camera_plane
-#             model_ents.add_cpoint point_a
-# 						# If bisector is pointing 'down' rotate dimension text 180 degreees
-#             if point_a.y < 0
-# 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
-# 							text_group.transform! text_rotate2
-#             end
+						if diff_x >= 0 && diff_y.abs <= diff_x.abs # bisector points in easterly quadrant (angle between +135 and -135)
+ 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 90.degrees
+							text_group.transform! text_rotate2
+            end
 
   ##---JWM
            # Calculate overal transformation to move dimension group to picked vertex in correct orientation
