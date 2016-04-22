@@ -17,8 +17,12 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
-     #v4.06 - senses screen orientation, and rotates text accordingly in 90 degree increments.
-     #          Removed text fill, which caused Z-fighting. Removed testing display of angle bisector
+     #v4.07 - tests whether whole dimension, only text, or neither, will fit inside dimension lines
+     #          and puts arrows and if necessary text, outside dimension lines.
+     #          Have still to rename vector to text position, to get the orientation of text correct on screen after move to vertex
+     #v4.06 - senses dimension angle bisector relative to screen orientation,
+     #          and rotates text accordingly in 90 degree increments.
+     #          Removed text fill, which caused Z-fighting. Removed test display of angle bisector
      #v4.05 - now sensing direction of vertex relative to screen - using view.screen_coords, and rotating text 180 degrees if nec.
      #v4.04 - partially working detection of direction of vertex, to rotate text if needed
      #v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
@@ -312,7 +316,8 @@ module JWMPlugins
 
 
         ## Draw angle text in 3D text, inside a group, at the origin
-          ## Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean), letter_height, tolerance, z, is_filled (Boolean), extrusion
+          ## Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean),
+          ##   letter_height, tolerance, z, is_filled (Boolean), extrusion
           ## You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
           ##   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value seems to be ignored]
           text_group = ents.add_group
@@ -335,23 +340,43 @@ module JWMPlugins
 
         ## Draw the arcs, arrowheads and text all at the origin first,
         ## then move all at once to dimensioned angle
-        #  Draw the arcs, number of segments proportional to the angle but kept as a multiple of 4
-          # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
-          arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, (0.5*angle - half_gap_angle), @arc_segments
-          arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, (0.5*angle + half_gap_angle), angle, @arc_segments
 
+        ## First work out if the arcs, text and arrowhead will fit inside the dimension lines
+        ## Allow an extra arrowhead length for a partial arc at each end
+          arrowhead_angle = 2*Math::atan(@arrow_scale)
+          if 2*arrowhead_angle + 2*half_gap_angle < angle # then angular dimension will fit inside dimension lines
+            dim_will_fit = true
+          end
+        #  Draw the arcs, number of segments as specified in initialize function
+          # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
+          if dim_will_fit
+            text_will_fit = true
+            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, (0.5*angle - half_gap_angle), @arc_segments
+            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, (0.5*angle + half_gap_angle), angle, @arc_segments
+          else
+            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, -arrowhead_angle,4
+            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, angle + arrowhead_angle, angle,  4
+            # See if text will fit, even though whole dimension won't
+            if 2.2*half_gap_angle < angle
+              text_will_fit = true
+            end
+          end
         ## Have to calculate all the transforms first, to insert component instance in the right place
         ## Scale the arrowheads to desired size
           t_scale = Geom::Transformation.scaling @arrow_scale*@radius
           # puts "arrow t_scale = #{@arrow_scale*@radius}"
         ## Rotate the arrowheads to line up with start and end of arc
+        if dim_will_fit
           arrow1_rotn = 90.degrees
           arrow2_rotn = -(90.degrees - angle)
+        else
+          arrow1_rotn = -90.degrees
+          arrow2_rotn = 90.degrees + angle
+        end
           arrow1_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow1_rotn
           arrow2_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow2_rotn
           arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
           arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
-
 
         # Combine transformations to insert an arrowhead at start and end of arcs
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*t_scale
@@ -361,18 +386,33 @@ module JWMPlugins
           ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
           ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
 
-          # Now move the center of the text to the center of the dimension arc ...
+        if text_will_fit
+          #  Move the center of the text to the center of the dimension arc ...
           arc_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
           #puts "arc_center = " + arc_center.to_s
           #ents.add_cpoint @pts[0]
 
-        text_posn = arc_center.- text_bb_center
-        text_group.move! text_posn
+          text_posn = arc_center.- text_bb_center
+          text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
           text_rotn1 = -(90.degrees - 0.5*angle)
 
           #text_rotn2 = Z_AXIS.angle_between normal
+
+
+        else # text won't fit - have to put it outside dimension, as well as the arcs and arrowheads
+        #  Move the center of the text outside of the first dimension arc ...
+          arc_center = Geom::Point3d.new [@radius*Math::cos(half_gap_angle + arrowhead_angle), -@radius*Math::sin(half_gap_angle + arrowhead_angle),0]
+          #puts "arc_center = " + arc_center.to_s
+          #ents.add_cpoint @pts[0]
+
+          text_posn = arc_center.- text_bb_center
+          text_group.move! text_posn
+        # ... and rotate it in line with the arc
+        # puts "normal = " + normal.to_s
+          text_rotn1 = -(half_gap_angle + arrowhead_angle)
+        end
           text_rotate1 = Geom::Transformation.rotation arc_center, Z_AXIS , text_rotn1
           text_group.transform! text_rotate1
 
@@ -380,7 +420,6 @@ module JWMPlugins
           ##ents.add_edges ORIGIN, [0,0,0.5*@radius]
           ## ... and a cpoint at its end
           ##ents.add_cpoint [0,0,0.5*@radius]
-
 ##+++SLB
           ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
           ## so the dimension goes into the picked points the right way round
