@@ -17,18 +17,21 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
-     #v4.07 - tests whether whole dimension, only text, or neither, will fit inside dimension lines
-     #          and puts arrows and if necessary text, outside dimension lines.
-     #          Have still to rename vector to text position, to get the orientation of text correct on screen after move to vertex
-     #v4.06 - senses dimension angle bisector relative to screen orientation,
-     #          and rotates text accordingly in 90 degree increments.
-     #          Removed text fill, which caused Z-fighting. Removed test display of angle bisector
-     #v4.05 - now sensing direction of vertex relative to screen - using view.screen_coords, and rotating text 180 degrees if nec.
-     #v4.04 - partially working detection of direction of vertex, to rotate text if needed
-     #v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
-     #v4.02 - partially working
-     #v4.01 - SLB code adapted for namespace change to JWM - works except not finding Images and Resources
-     #        but works if those folders are placed in Plugins in a folder JWM_draw_angle_dim
+#      v4.08 - Moved make_arrowhead into a function, and reordered some of the steps for future use
+#      v4.07 - tests whether whole dimension, only text, or neither, will fit inside dimension lines
+#              and puts arrows and if necessary text, outside dimension lines.
+#              Have still to rename vector to text position, to get the orientation of text correct on screen after move to vertex
+#
+#      v4.06 - senses dimension angle bisector relative to screen orientation,
+#              and rotates text accordingly in 90 degree increments.
+#              Removed text fill, which caused Z-fighting. Removed test display of angle bisector
+#
+#      v4.05 - now sensing direction of vertex relative to screen - using view.screen_coords, and rotating text 180 degrees if nec.
+#      v4.04 - partially working detection of direction of vertex, to rotate text if needed
+#      v4.03 - working with SLB transformation matrix, and three arrow styles implemented. Text can still be upside down
+#      v4.02 - partially working
+#      v4.01 - SLB code adapted for namespace change to JWM - works except not finding Images and Resources
+#              but works if those folders are placed in Plugins in a folder JWM_draw_angle_dim
 ##---JWM
 module JWMPlugins
 
@@ -75,7 +78,8 @@ module JWMPlugins
       @user_radius = -1
       @radius = 0
 ##+++JWM
-    # Text size as a fraction of @radius - default, 0.1*
+    # Text size as a fraction of @radius - default, 0.1. Or user can set fixed height
+        @user_text_height = -1
         @text_scale = 0.1
     # Dimension line scale as fraction of radius
         @dim_line_scale = 1.05
@@ -90,6 +94,41 @@ module JWMPlugins
       @inside = true
       @cursor = IN_CURSOR
     end # def
+
+#+++JWM
+    def make_arrowhead(arrow_style, arrowhead)
+    # Draw an arrowhead component
+      arrow_points = Array.new ;
+      arrow_points[0] = [1.0, -0.3, 0]
+      arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+      arrow_points[2] = [1.0,  0.3, 0]
+      puts "arrrow_style = #{@arrow_style}"
+
+      case arrow_style # Set in initialize as closed, open or line
+
+      when "closed"
+        arrow_face = arrowhead.entities.add_face(arrow_points)
+        # If the  blue face is pointing up, reverse it.
+        arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+      when "open"
+        arrow_lines = arrowhead.entities.add_edges arrow_points
+      when "line"
+        arrow_points[0] = [0.5, -0.5, 0]
+        arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+        arrow_points[2] = [-0.5,  0.5, 0]
+        arrow_lines = arrowhead.entities.add_edges arrow_points
+      else
+        UI.messagebox "Sorry that #{arrow_style} is not a valid arrow type. Please edit the script and initialize @arrow_style"
+        return false
+      end #case
+      return arrowhead
+
+        # To add the component directly to the model, you have to define a transformation. We can define
+        # a transformation that does nothing to just get the job done.
+        # trans = Geom::Transformation.new  # an empty, default transformation.
+        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
+   end # def
+#---JWM
 
     def show_status
       Sketchup::set_status_text (DangLH['arc radius']), SB_VCB_LABEL
@@ -160,7 +199,7 @@ module JWMPlugins
       view.invalidate
     end
 
-    # draw the angle dimension info
+# draw the angle dimension info
     def draw_angle_dim
       model = Sketchup.active_model
 
@@ -192,51 +231,23 @@ module JWMPlugins
       end
 ##+++JWM
       # scale the vectors to extend the radius a little.  This will affect
-      # the drawn edges.  The value is arbitrary - change @dim_line_scale in def initialize if another
-      # look is desired
+      # the drawn edges.  The value is arbitrary - change @dim_line_scale in
+      # def initialize if another look is desired
       vec1.length = @radius * @dim_line_scale
       vec2.length = @radius * @dim_line_scale
 
       # the angle bisector vector - used for placing the text
+      # unless angle is too small
       bisector = (vec1+vec2)
 
-      # bisector length controls text placement - to centre text on arc, needs to be at radius
+      # bisector length controls text placement - to centre text on arc,
+      # needs to be at radius
       bisector.length = @radius
 
-    # Draw an arrowhead component if there isn't one already
 
-    if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-        jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
-        arrow_points = Array.new ;
-        arrow_points[0] = [1.0, -0.3, 0]
-        arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
-        arrow_points[2] = [1.0,  0.3, 0]
-        puts "arrrow_style = #{@arrow_style}"
-
-        case @arrow_style # Set in initialize as closed, open or line
-
-        when "closed"
-					arrow_face = jwm_arrowhead.entities.add_face(arrow_points)
-					# If the  blue face is pointing up, reverse it.
-					arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
-        when "open"
-				  arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
-				when "line"
-					arrow_points[0] = [0.5, -0.5, 0]
-					arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
-					arrow_points[2] = [-0.5,  0.5, 0]
-					arrow_lines = jwm_arrowhead.entities.add_edges arrow_points
-			  else
-			    UI.messagebox "Sorry that #{@arrow_style} is not a valid arrow type. Please edit the script and set @arrow_style"
-        end #case
-
-        # To add the component directly to the model, you have to define a transformation. We can define
-        # a transformation that does nothing to just get the job done.
-        # trans = Geom::Transformation.new  # an empty, default transformation.
-        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
-    end # if
 
 ##---JWM
+
       # find the angle between the vectors and the normal to their plane
       # this calculation should not explode, since we trapped the case of
       # parallel above (angle = 0 or 180), but the calculation of the normal
@@ -245,6 +256,7 @@ module JWMPlugins
       angle = vec1.angle_between vec2
       complement = 360.degrees - angle
 
+  # Set text depending on inside or outside angle chosen
       text = Sketchup.format_angle(angle) + "°"
       text2  = Sketchup.format_angle(complement) + "°"
 
@@ -271,11 +283,11 @@ module JWMPlugins
 
 ##+++JWM
       #ents.add_edges edge_pts
-			# To see where the pick points were:
-# 				model = Sketchup.active_model
-#				model_ents = model.entities
-# 				model_ents.add_cpoint @pts[0]
-# 				model_ents.add_cpoint @pts[2]
+      # To see where the pick points were:
+#         model = Sketchup.active_model
+#       model_ents = model.entities
+#         model_ents.add_cpoint @pts[0]
+#         model_ents.add_cpoint @pts[2]
 #       angle_edges = model_ents.add_edges edge_pts
 #       if angle_edges
 #         face = angle_edges[0].common_face angle_edges[1]
@@ -304,6 +316,11 @@ module JWMPlugins
       #model_ents.add_edges edge_bisector.to_a
       #model_ents.add_cpoint edge_bisector[1].to_a
 
+      #Create arrowhead if it hasn't already been drawn
+      if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
+        jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
+        make_arrowhead(@arrow_style, jwm_arrowhead)
+      end
 ##---JWM
 
       if(@inside)
@@ -424,79 +441,79 @@ module JWMPlugins
           ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
           ## so the dimension goes into the picked points the right way round
             camera = Sketchup.active_model.active_view.camera
-					  view_dir = camera.direction
-					  dot = normal.dot view_dir
-						ccw = dot > 0
-					 # puts "dot = #{dot}, ccw = #{ccw}"
-						if ccw
-							normal.reverse!
-							temp=vec1
-							vec1=vec2
-							vec2=temp
-						end
+            view_dir = camera.direction
+            dot = normal.dot view_dir
+            ccw = dot > 0
+           # puts "dot = #{dot}, ccw = #{ccw}"
+            if ccw
+              normal.reverse!
+              temp=vec1
+              vec1=vec2
+              vec2=temp
+            end
   ##+++JWM
-						# Check orientation of angle bisector relative to camera view.
-						# Returned values are X from left to right (in pixels, approximately) and
-						#   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
-						view = Sketchup.active_model.active_view
-						pt_vertex = view.screen_coords @pts[1]
-						#puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
-						pt_bisector = view.screen_coords edge_bisector[1]
-						#puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
+            # Check orientation of angle bisector relative to camera view.
+            # Returned values are X from left to right (in pixels, approximately) and
+            #   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
+            view = Sketchup.active_model.active_view
+            pt_vertex = view.screen_coords @pts[1]
+            #puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
+            pt_bisector = view.screen_coords edge_bisector[1]
+            #puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
 
-						# Now calculate which quadrant the bisector line appears to be in the current view, and
-						#   rotate text accordingly to keep it mostly upright
-						diff_x = (pt_bisector.x - pt_vertex.x)
-						diff_y = (pt_bisector.y - pt_vertex.y)
+            # Now calculate which quadrant the bisector line appears to be in the current view, and
+            #   rotate text accordingly to keep it mostly upright
+            diff_x = (pt_bisector.x - pt_vertex.x)
+            diff_y = (pt_bisector.y - pt_vertex.y)
 
-						if diff_y < 0 && diff_y.abs > diff_x.abs # bisector points in northerly quadrant (angle between +45  and +135 degrees)
-						    # no rotation required
-						end
-
-						if diff_y >= 0 && diff_y.abs > diff_x.abs # bisector points in southerly quadrant (angle between -45 and -135)
- 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
-							text_group.transform! text_rotate2
+            if diff_y < 0 && diff_y.abs > diff_x.abs # bisector points in northerly quadrant (angle between +45  and +135 degrees)
+                # no rotation required
             end
 
-						if diff_x < 0 && diff_y.abs <= diff_x.abs # bisector points in westerly quadrant (angle between +135 and -135)
- 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, -90.degrees
-							text_group.transform! text_rotate2
+            if diff_y >= 0 && diff_y.abs > diff_x.abs # bisector points in southerly quadrant (angle between -45 and -135)
+              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
+              text_group.transform! text_rotate2
             end
 
-						if diff_x >= 0 && diff_y.abs <= diff_x.abs # bisector points in easterly quadrant (angle between +135 and -135)
- 							text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 90.degrees
-							text_group.transform! text_rotate2
+            if diff_x < 0 && diff_y.abs <= diff_x.abs # bisector points in westerly quadrant (angle between +135 and -135)
+              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, -90.degrees
+              text_group.transform! text_rotate2
+            end
+
+            if diff_x >= 0 && diff_y.abs <= diff_x.abs # bisector points in easterly quadrant (angle between +135 and -135)
+              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 90.degrees
+              text_group.transform! text_rotate2
             end
 
   ##---JWM
            # Calculate overal transformation to move dimension group to picked vertex in correct orientation
-						# Unit vectors for where we want the x,y,z axes of the group drawn
-						#   at the origin to end up
-						newx = vec1.normalize
-						newz = normal
-						newy = newz.cross(newx).normalize
+            # Unit vectors for where we want the x,y,z axes of the group drawn
+            #   at the origin to end up
+            newx = vec1.normalize
+            newz = normal
+            newy = newz.cross(newx).normalize
 
-						# use the normal vectors to build a transformation matrix
-						trans_array = []
-						trans_array[0] = newx[0]
-						trans_array[1] = newx[1]
-						trans_array[2] = newx[2]
-						trans_array[3] = 0.0
-						trans_array[4] = newy[0]
-						trans_array[5] = newy[1]
-						trans_array[6] = newy[2]
-						trans_array[7] = 0.0
-						trans_array[8] = newz[0]
-						trans_array[9] = newz[1]
-						trans_array[10] = newz[2]
-						trans_array[11] = 0.0
-						trans_array[12] = @pts[1][0]
-						trans_array[13] = @pts[1][1]
-						trans_array[14] = @pts[1][2]
-						trans_array[15] = 1.0
+            # use the normal vectors to build a transformation matrix
+            trans_array = []
+            trans_array[0] = newx[0]
+            trans_array[1] = newx[1]
+            trans_array[2] = newx[2]
+            trans_array[3] = 0.0
+            trans_array[4] = newy[0]
+            trans_array[5] = newy[1]
+            trans_array[6] = newy[2]
+            trans_array[7] = 0.0
+            trans_array[8] = newz[0]
+            trans_array[9] = newz[1]
+            trans_array[10] = newz[2]
+            trans_array[11] = 0.0
+            trans_array[12] = @pts[1][0]
+            trans_array[13] = @pts[1][1]
+            trans_array[14] = @pts[1][2]
+            trans_array[15] = 1.0
 
-						trans_from_array = Geom::Transformation.new trans_array
-						group.transform! trans_from_array
+            trans_from_array = Geom::Transformation.new trans_array
+            group.transform! trans_from_array
 
 ##---SLB
 #           Move whole dimension group to the angle vertex (@pts[1])
