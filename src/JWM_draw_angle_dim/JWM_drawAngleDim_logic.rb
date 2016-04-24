@@ -17,6 +17,8 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.09 - Text outside dimension angle now correctly positioned and oriented
+#                 though I can't understand quite why it needs 90 deg different rotation from text inside angle
 #      v4.08 - Moved make_arrowhead into a function, and reordered some of the steps for future use
 #      v4.07 - tests whether whole dimension, only text, or neither, will fit inside dimension lines
 #              and puts arrows and if necessary text, outside dimension lines.
@@ -51,7 +53,7 @@ module JWMPlugins
 
     IN_CURSOR = UI::create_cursor(IN_ICON, 0, 31)
     OUT_CURSOR = UI::create_cursor(OUT_ICON, 0, 31)
-
+#-----------------------------------------------------------------------------
     def initialize
       # @ip is the InputPoint from the current pick
       @ip = Sketchup::InputPoint.new
@@ -80,11 +82,11 @@ module JWMPlugins
 ##+++JWM
     # Text size as a fraction of @radius - default, 0.1. Or user can set fixed height
         @user_text_height = -1
-        @text_scale = 0.1
+        @text_scale = 0.05
     # Dimension line scale as fraction of radius
         @dim_line_scale = 1.05
     # Arrowhead length as fraction of @radius
-        @arrow_scale = 0.08
+        @arrow_scale = 0.05
     # Arc segments for dimension arcs
         @arc_segments = 12
     # Arrow style closed, open or line?
@@ -94,42 +96,7 @@ module JWMPlugins
       @inside = true
       @cursor = IN_CURSOR
     end # def
-
-#+++JWM
-    def make_arrowhead(arrow_style, arrowhead)
-    # Draw an arrowhead component
-      arrow_points = Array.new ;
-      arrow_points[0] = [1.0, -0.3, 0]
-      arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
-      arrow_points[2] = [1.0,  0.3, 0]
-      puts "arrrow_style = #{@arrow_style}"
-
-      case arrow_style # Set in initialize as closed, open or line
-
-      when "closed"
-        arrow_face = arrowhead.entities.add_face(arrow_points)
-        # If the  blue face is pointing up, reverse it.
-        arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
-      when "open"
-        arrow_lines = arrowhead.entities.add_edges arrow_points
-      when "line"
-        arrow_points[0] = [0.5, -0.5, 0]
-        arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
-        arrow_points[2] = [-0.5,  0.5, 0]
-        arrow_lines = arrowhead.entities.add_edges arrow_points
-      else
-        UI.messagebox "Sorry that #{arrow_style} is not a valid arrow type. Please edit the script and initialize @arrow_style"
-        return false
-      end #case
-      return arrowhead
-
-        # To add the component directly to the model, you have to define a transformation. We can define
-        # a transformation that does nothing to just get the job done.
-        # trans = Geom::Transformation.new  # an empty, default transformation.
-        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
-   end # def
-#---JWM
-
+#-----------------------------------------------------------------------------
     def show_status
       Sketchup::set_status_text (DangLH['arc radius']), SB_VCB_LABEL
       if(@radius != 0)
@@ -146,7 +113,7 @@ module JWMPlugins
         #        Sketchup::set_status_text (DangLH['Point 3: last end of measured angle'])
       end
     end # def
-
+#-----------------------------------------------------------------------------
     # clear out all saved data from previous operation
     def reset
       @pts = []
@@ -157,16 +124,16 @@ module JWMPlugins
       UI.set_cursor(@cursor)
       show_status
     end # def
-
+#-----------------------------------------------------------------------------
     def activate
       reset
     end
-
+#-----------------------------------------------------------------------------
     def deactivate(view)
       reset
       view.invalidate if @drawn
     end
-
+#-----------------------------------------------------------------------------
     def set_current_point(x, y, view)
       case @state
       when 0
@@ -192,13 +159,60 @@ module JWMPlugins
       end
       show_status
     end
-
+#-----------------------------------------------------------------------------
     # need this to cause inference point and tooltips to be drawn
     def onMouseMove(flags, x, y, view)
       @ip.pick(view, x, y, @ip1)
       view.invalidate
     end
+#-----------------------------------------------------------------------------
+#+++JWM
+    def make_arrowhead(arrow_style, arrowhead)
+    # arrow_style - text "closed", "open" or "line" (may add "dot" later)
+    # or might change to built in SU constants
+    # arrowhead - an empty component definition object
 
+    # Draw an arrowhead component
+      arrow_points = Array.new ;
+      arrow_points[0] = [1.0, -0.3, 0]
+      arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+      arrow_points[2] = [1.0,  0.3, 0]
+      # "arrrow_style = #{@arrow_style}"
+
+      case arrow_style # Set in initialize as closed, open or line
+
+      when "closed"
+        arrow_face = arrowhead.entities.add_face(arrow_points)
+        # If the  blue face is pointing up, reverse it.
+        arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+      when "open"
+        arrow_lines = arrowhead.entities.add_edges arrow_points
+      when "line"
+        arrow_points[0] = [0.5, -0.5, 0]
+        arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
+        arrow_points[2] = [-0.5,  0.5, 0]
+        arrow_lines = arrowhead.entities.add_edges arrow_points
+      else
+        UI.messagebox "Sorry that #{arrow_style} is not a valid arrow type. Please edit the script and initialize @arrow_style"
+        return false
+      end #case
+      return arrowhead
+
+        # To add the component directly to the model, you have to define a transformation. We can define
+        # a transformation that does nothing to just get the job done.
+        # trans = Geom::Transformation.new  # an empty, default transformation.
+        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
+    end # def
+#-----------------------------------------------------------------------------
+
+    def space_for_text(angle, radius, text_rotn, text_bb_center, text_bb_width, text_bb_height)
+      space_for_text = 2.0 * Math::atan(0.5*text_bb_width/@radius)
+    end
+
+
+#---JWM
+
+#-----------------------------------------------------------------------------
 # draw the angle dimension info
     def draw_angle_dim
       model = Sketchup.active_model
@@ -224,6 +238,7 @@ module JWMPlugins
         reset
         return
       end
+
       if(vec1.parallel? vec2)
         UI.messagebox(DangLH['The selected lines are parallel, angle is 0 or 180'])
         reset
@@ -276,10 +291,10 @@ module JWMPlugins
       ents = group.entities
 
       # add the angle edges to the group, scaled to the selected radius
-      edge_pts = []
-      edge_pts[0] = @pts[1].offset vec1
-      edge_pts[1] = @pts[1]
-      edge_pts[2] = @pts[1].offset vec2
+#       edge_pts = []
+#       edge_pts[0] = @pts[1].offset vec1
+#       edge_pts[1] = @pts[1]
+#       edge_pts[2] = @pts[1].offset vec2
 
 ##+++JWM
       #ents.add_edges edge_pts
@@ -301,9 +316,9 @@ module JWMPlugins
 #        end
 #      end
 #       Temporarily add edge for normal to and bisector of dimension lines
-      edge_normal = []
-      edge_normal[0] = @pts[1]
-      edge_normal[1] = @pts[1].offset normal
+#       edge_normal = []
+#       edge_normal[0] = @pts[1]
+#       edge_normal[1] = @pts[1].offset normal
 #      model = Sketchup.active_model
 #      modelents = model.entities
 #      modelents.add_edges edge_normal
@@ -330,62 +345,76 @@ module JWMPlugins
         # draw the arc across the angle at the selected radius
         #arc = ents.add_arc @pts[1], vec1, normal, @radius, 0, angle, 30
 
+## To get text orientation and placement correct, we first have to work out where it would go, before drawing anything
 
-
+      #----------------- Work out where to put text
         ## Draw angle text in 3D text, inside a group, at the origin
-          ## Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean),
-          ##   letter_height, tolerance, z, is_filled (Boolean), extrusion
-          ## You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
-          ##   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value seems to be ignored]
+          # Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean),
+          #   letter_height, tolerance, z, is_filled (Boolean), extrusion
+          # You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
+          #   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value
+          #   is overwritten by the move]
+          # Could also move text_group as a whole up - may try that later
+
           text_group = ents.add_group
-          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0.0, false, 0.0
-          # Col(o)ur the text black (optionsl - can cause Z-fighting in display)
+          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 1.0, false, 0.0
+          # Colo(u)r the text black (optional - can cause Z-fighting in display)
           #text_group.material = "black"
 
-          # Find the centre and width of the text group from its bounding box
+          # Find the centre, width and height of the text group from its bounding box (bb_height may be bigger than letter_height)
           text_bb_center = text_group.local_bounds.center
           text_bb_width = text_group.local_bounds.width
+          text_bb_height = text_group.local_bounds.height
+
 
           ## Work out how to draw dimension arc in two parts to leave a gap for the dimension text
           ## Might want to make the gap just a little bigger than text width, if text aligns with arc,
-          ## so try adding say 10%
-          half_gap_angle = 1.1*Math::atan(0.5*text_bb_width/@radius)
-          # puts half_gap_angle.to_s
-          # This would draw the arcs in place
-          #arc1 = ents.add_arc @pts[1], vec1, normal, @radius, (0.5*angle + half_gap_angle), angle, 12
-          #arc2 = ents.add_arc @pts[1], vec1, normal, @radius, 0, (0.5*angle - half_gap_angle),12
+          ## but for the moment, leave it at width
+
+          # Oversimple calculation leaves room for text in any orientation, but sometimes too much room
+          # text_gap_angle = 2.0 * Math::atan(0.5*text_bb_width/@radius)
+
+          text_gap_angle = space_for_text(angle, @radius, nil, text_bb_center, text_bb_width, text_bb_height)
+          # puts text_gap_angle.radians.round(1).to_s
 
         ## Draw the arcs, arrowheads and text all at the origin first,
         ## then move all at once to dimensioned angle
 
         ## First work out if the arcs, text and arrowhead will fit inside the dimension lines
-        ## Allow an extra arrowhead length for a partial arc at each end
-          arrowhead_angle = 2*Math::atan(@arrow_scale)
-          if 2*arrowhead_angle + 2*half_gap_angle < angle # then angular dimension will fit inside dimension lines
+        ## Allow an extra half-arrowhead length for a minimal  partial arc at each end
+          arrowhead_angle = 2.0 * Math::atan(@arrow_scale)
+          if 2 * arrowhead_angle + text_gap_angle < angle # then angular dimension will fit inside dimension lines
             dim_will_fit = true
           end
+
+      #----------------- Draw arcs
         #  Draw the arcs, number of segments as specified in initialize function
           # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
           if dim_will_fit
             text_will_fit = true
-            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, (0.5*angle - half_gap_angle), @arc_segments
-            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, (0.5*angle + half_gap_angle), angle, @arc_segments
+            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, 0.5*(angle - text_gap_angle), @arc_segments
+            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0.5*(angle + text_gap_angle), angle, @arc_segments
           else
-            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, -arrowhead_angle,4
-            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, angle + arrowhead_angle, angle,  4
+            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, - arrowhead_angle, 4
+            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, angle + arrowhead_angle, angle, 4
             # See if text will fit, even though whole dimension won't
-            if 2.2*half_gap_angle < angle
+            if 1.05*text_gap_angle < angle
               text_will_fit = true
             end
           end
+
+      #----------------- Calculate transforms to put dimensions in the right place
         ## Have to calculate all the transforms first, to insert component instance in the right place
         ## Scale the arrowheads to desired size
-          t_scale = Geom::Transformation.scaling @arrow_scale*@radius
-          # puts "arrow t_scale = #{@arrow_scale*@radius}"
+          arrow_size_scale = Geom::Transformation.scaling @arrow_scale*@radius
+          # puts "arrow arrow_size_scale = #{@arrow_scale*@radius}"
+
+
+      #----------------- Will dimension arrows fit between dimension lines?
         ## Rotate the arrowheads to line up with start and end of arc
         if dim_will_fit
           arrow1_rotn = 90.degrees
-          arrow2_rotn = -(90.degrees - angle)
+          arrow2_rotn = angle - 90.degrees
         else
           arrow1_rotn = -90.degrees
           arrow2_rotn = 90.degrees + angle
@@ -396,47 +425,49 @@ module JWMPlugins
           arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*t_scale
-          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*t_scale
+          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
+          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
           # Put in angle delimiter lines at origin
           ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
           ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
 
+      #-----------------  Will text fit between dimension lines?
         if text_will_fit
           #  Move the center of the text to the center of the dimension arc ...
-          arc_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
-          #puts "arc_center = " + arc_center.to_s
-          #ents.add_cpoint @pts[0]
+          text_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
+          #puts "text_center = " + text_center.to_s
+          ents.add_cpoint text_center
 
-          text_posn = arc_center.- text_bb_center
+          text_posn = text_center - text_bb_center
           text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
           text_rotn1 = -(90.degrees - 0.5*angle)
 
-          #text_rotn2 = Z_AXIS.angle_between normal
-
-
         else # text won't fit - have to put it outside dimension, as well as the arcs and arrowheads
         #  Move the center of the text outside of the first dimension arc ...
-          arc_center = Geom::Point3d.new [@radius*Math::cos(half_gap_angle + arrowhead_angle), -@radius*Math::sin(half_gap_angle + arrowhead_angle),0]
-          #puts "arc_center = " + arc_center.to_s
-          #ents.add_cpoint @pts[0]
+          text_center = Geom::Point3d.new [@radius*Math::cos(0.5*text_gap_angle + arrowhead_angle), -@radius*Math::sin(0.5*text_gap_angle + arrowhead_angle),0]
+          puts "text_center = " + text_center.to_s
+          ents.add_cpoint text_center
 
-          text_posn = arc_center.- text_bb_center
+          text_posn = text_center - text_bb_center
           text_group.move! text_posn
+
         # ... and rotate it in line with the arc
         # puts "normal = " + normal.to_s
-          text_rotn1 = -(half_gap_angle + arrowhead_angle)
+          text_rotn1 = -(0.5*text_gap_angle + arrowhead_angle)
         end
-          text_rotate1 = Geom::Transformation.rotation arc_center, Z_AXIS , text_rotn1
+          text_rotate1 = Geom::Transformation.rotation text_center, Z_AXIS , text_rotn1
           text_group.transform! text_rotate1
 
           ## Temporarily add normal vector to dimensions - up the Z_AXIS
           ##ents.add_edges ORIGIN, [0,0,0.5*@radius]
           ## ... and a cpoint at its end
           ##ents.add_cpoint [0,0,0.5*@radius]
+
+
+      #----------------- Work out orientation of dimension and text placement in relation to screen view at time of placement.
 ##+++SLB
           ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
           ## so the dimension goes into the picked points the right way round
@@ -451,42 +482,77 @@ module JWMPlugins
               vec1=vec2
               vec2=temp
             end
-  ##+++JWM
-            # Check orientation of angle bisector relative to camera view.
+##---SLB
+##+++JWM
+            # Check orientation of text_posn relative to vertex, in camera's view.
             # Returned values are X from left to right (in pixels, approximately) and
             #   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
             view = Sketchup.active_model.active_view
             pt_vertex = view.screen_coords @pts[1]
-            #puts "vertex screen coords = #{pt_vertex.x.to_int}, #{pt_vertex.y.to_int}"
-            pt_bisector = view.screen_coords edge_bisector[1]
-            #puts "bisector screen coords = #{pt_bisector.x.to_int}, #{pt_bisector.y.to_int}"
+            # Calculate final text position near vertex from angle bisector, and rotation if text is outside dimension
+            if text_will_fit
+              pt_text_center = edge_bisector[1]
+            else
+              # Text is rotated outside dimension lines - recalculate where text center will be after dimension group is relocated to vertex
+              transform_text_center = Geom::Transformation.rotation @pts[1], normal,  -0.5*(angle + text_gap_angle)
+              pt_text_center = edge_bisector[1].transform! transform_text_center
+            end
 
-            # Now calculate which quadrant the bisector line appears to be in the current view, and
+
+
+            pt_text_posn = view.screen_coords pt_text_center
+            puts "text position screen coords = #{pt_text_posn.x.to_int}, #{pt_text_posn.y.to_int}"
+
+            # Now calculate which quadrant the vertex-to-text-centre line appears to be in the current view, and
             #   rotate text accordingly to keep it mostly upright
-            diff_x = (pt_bisector.x - pt_vertex.x)
-            diff_y = (pt_bisector.y - pt_vertex.y)
+            diff_x = (pt_text_posn.x - pt_vertex.x)
+            diff_y = (pt_text_posn.y - pt_vertex.y)
 
-            if diff_y < 0 && diff_y.abs > diff_x.abs # bisector points in northerly quadrant (angle between +45  and +135 degrees)
+            if diff_y < 0 && diff_y.abs > diff_x.abs # vertex to text center points in northerly quadrant (angle between +45  and +135 degrees)
+                if text_will_fit
                 # no rotation required
+                else
+                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, -90.degrees
+                  text_group.transform! text_rotate2
+                end
+#               puts "northerly"
             end
 
-            if diff_y >= 0 && diff_y.abs > diff_x.abs # bisector points in southerly quadrant (angle between -45 and -135)
-              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 180.degrees
-              text_group.transform! text_rotate2
+            if diff_y >= 0 && diff_y.abs > diff_x.abs # vertex to text center points in southerly quadrant (angle between -45 and -135)
+              if text_will_fit
+                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 180.degrees
+                text_group.transform! text_rotate2
+              else
+                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 90.degrees
+                  text_group.transform! text_rotate2
+              end
+#               puts "southerly"
             end
 
-            if diff_x < 0 && diff_y.abs <= diff_x.abs # bisector points in westerly quadrant (angle between +135 and -135)
-              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, -90.degrees
-              text_group.transform! text_rotate2
+            if diff_x < 0 && diff_y.abs <= diff_x.abs # vertex to text center points in westerly quadrant (angle between +135 and -135)
+              if text_will_fit
+                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, -90.degrees
+                text_group.transform! text_rotate2
+              else
+                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 180.degrees
+                  text_group.transform! text_rotate2
+              end
+#               puts "westerly"
             end
 
-            if diff_x >= 0 && diff_y.abs <= diff_x.abs # bisector points in easterly quadrant (angle between +135 and -135)
-              text_rotate2 = Geom::Transformation.rotation arc_center, Z_AXIS, 90.degrees
-              text_group.transform! text_rotate2
+            if diff_x >= 0 && diff_y.abs <= diff_x.abs #  vertex to text center points in easterly quadrant (angle between +135 and -135)
+              if text_will_fit
+                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 90.degrees
+                text_group.transform! text_rotate2
+              else
+                # no rotation required
+              end
+#               puts "easterly"
             end
 
-  ##---JWM
-           # Calculate overal transformation to move dimension group to picked vertex in correct orientation
+##---JWM
+##+++SLB
+      #----------------- Calculate overall transformation to move dimension group to picked vertex in correct orientation
             # Unit vectors for where we want the x,y,z axes of the group drawn
             #   at the origin to end up
             newx = vec1.normalize
@@ -516,35 +582,7 @@ module JWMPlugins
             group.transform! trans_from_array
 
 ##---SLB
-#           Move whole dimension group to the angle vertex (@pts[1])
-#           move_dims = Geom::Transformation.translation  @pts[1].to_a
-#           group.transform! move_dims
-#
-#           First rotate the dimension group into the plane of the picked points
-#           Calculate the normal between the plane of the three pick points (already named ‘normal') and
-#             the drawn dimension (still the Z_AXIS)
-#           if !(normal.parallel? Z_AXIS)
-#             rotn_axis1 = normal.cross Z_AXIS
-#           else
-#             rotn_axis1 = normal
-#           end
-#           rotn_angle1 = normal.angle_between Z_AXIS
-#           plane_rotate = Geom::Transformation.rotation @pts[1], rotn_axis1, -rotn_angle1
-#           group.transform! plane_rotate
-#
-#           Next rotate about the normal vector to the picked plane, by the angle between the dimension group‘s
-#            transformed X direction and the original vec1. First set vec3 to the transformed position of the x- direction
-#           vec3 = Geom::Vector3d.new [1, 0, 0]
-#           vec3.transform! plane_rotate * move_dims
-#            Now caclulate the angle:
-#           rotn_angle2 = vec3.angle_between vec1
-#           puts 'rotn_angle2 = ' + rotn_angle2.radians.to_s
-#           if ccw
-#             group_rotate = Geom::Transformation.rotation @pts[1], normal, -rotn_angle2
-#           else
-#              group_rotate = Geom::Transformation.rotation @pts[1], normal, rotn_angle2
-#           end
-#           group.transform! group_rotate
+
 ##---JWM
 
 
@@ -564,7 +602,7 @@ module JWMPlugins
       @state = 0
       show_status
     end
-
+#-----------------------------------------------------------------------------
     # advance to the next state and set the status texts appropriately.
     def increment_state
       @state += 1
@@ -584,18 +622,18 @@ module JWMPlugins
         draw_angle_dim
       end
     end
-
+#-----------------------------------------------------------------------------
     # user clicks the mouse button - capture the data point and advance the state
     def onLButtonDown(flags, x, y, view)
       set_current_point(x, y, view)
       increment_state
     end
-
+#-----------------------------------------------------------------------------
     def onCancel(flag, view)
       view.invalidate if @drawn
       reset
     end
-
+#-----------------------------------------------------------------------------
     # accept user input in the VCB as the desired radius of the dimension arc
     def onUserText(text, view)
       # The user may type in something that we can't parse as a length
@@ -626,18 +664,18 @@ module JWMPlugins
         draw_angle_dim
       end
     end
-
+#-----------------------------------------------------------------------------
     # invoked by SketchUp when the view is invalidated.  This makes sure the
     # pick point and tooltip are visible.
     def draw(view)
       view.tooltip = @ip.tooltip
       @ip.draw view
     end
-
+#-----------------------------------------------------------------------------
     def onSetCursor
       UI::set_cursor(@cursor)
     end
-
+#-----------------------------------------------------------------------------
     # Toggle the drawing mode when the user presses TAB
     # on a PC or ALT on a Mac.
     # This method is inherently non-portable because one
@@ -668,12 +706,12 @@ module JWMPlugins
         end
       end
     end
-
+#-----------------------------------------------------------------------------
     # def onKeyUp(key, rpt, flags, view)
     # end
 
   end # class DrawAngleDimTool
-
+#-----------------------------------------------------------------------------
   def self.draw_angle_dim_tool
     Sketchup.active_model.select_tool JWMPlugins::DrawAngleDimTool.new
   end
