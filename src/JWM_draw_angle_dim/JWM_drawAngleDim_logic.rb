@@ -17,7 +17,9 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
-#      v4.09 - Text outside dimension angle now correctly positioned and oriented
+#      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
+#                 external text for small angles is put - it goes at the first picked end
+#      v4.09 - Text that won't fit in dimension angle now correctly positioned and oriented at start
 #                 though I can't understand quite why it needs 90 deg different rotation from text inside angle
 #      v4.08 - Moved make_arrowhead into a function, and reordered some of the steps for future use
 #      v4.07 - tests whether whole dimension, only text, or neither, will fit inside dimension lines
@@ -290,6 +292,22 @@ module JWMPlugins
       end
       ents = group.entities
 
+##+++SLB
+      ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
+      ## so the dimension goes into the picked points the right way round
+        camera = Sketchup.active_model.active_view.camera
+        view_dir = camera.direction
+        dot = normal.dot view_dir
+        ccw = dot > 0
+       # puts "dot = #{dot}, ccw = #{ccw}"
+        if ccw
+          normal.reverse!
+          temp=vec1
+          vec1=vec2
+          vec2=temp
+        end
+##---SLB
+
       # add the angle edges to the group, scaled to the selected radius
 #       edge_pts = []
 #       edge_pts[0] = @pts[1].offset vec1
@@ -446,9 +464,15 @@ module JWMPlugins
           text_rotn1 = -(90.degrees - 0.5*angle)
 
         else # text won't fit - have to put it outside dimension, as well as the arcs and arrowheads
-        #  Move the center of the text outside of the first dimension arc ...
-          text_center = Geom::Point3d.new [@radius*Math::cos(0.5*text_gap_angle + arrowhead_angle), -@radius*Math::sin(0.5*text_gap_angle + arrowhead_angle),0]
-          puts "text_center = " + text_center.to_s
+        #  Move the center of the text outside the dimension arc ...
+          if !ccw # points were picked clockwise. Put arc at start
+
+            text_center = Geom::Point3d.new [@radius*Math::cos(0.5*text_gap_angle + arrowhead_angle), -@radius*Math::sin(0.5*text_gap_angle + arrowhead_angle),0]
+            #puts "text_center = " + text_center.to_s
+          else
+          # or at the other end of the dimension arc (counterclockwise from start)
+            text_center = Geom::Point3d.new [@radius*Math::cos(angle + 0.5*text_gap_angle + arrowhead_angle), @radius*Math::sin(angle + 0.5*text_gap_angle + arrowhead_angle),0]
+          end
           ents.add_cpoint text_center
 
           text_posn = text_center - text_bb_center
@@ -456,7 +480,11 @@ module JWMPlugins
 
         # ... and rotate it in line with the arc
         # puts "normal = " + normal.to_s
-          text_rotn1 = -(0.5*text_gap_angle + arrowhead_angle)
+          if !ccw
+            text_rotn1 = -(0.5*text_gap_angle + arrowhead_angle)
+          else #at end
+            text_rotn1 = angle + 0.5*text_gap_angle + arrowhead_angle
+          end
         end
           text_rotate1 = Geom::Transformation.rotation text_center, Z_AXIS , text_rotn1
           text_group.transform! text_rotate1
@@ -468,21 +496,7 @@ module JWMPlugins
 
 
       #----------------- Work out orientation of dimension and text placement in relation to screen view at time of placement.
-##+++SLB
-          ## Adjust direction of normal, and order of vec1, vec2, in relation to view angle
-          ## so the dimension goes into the picked points the right way round
-            camera = Sketchup.active_model.active_view.camera
-            view_dir = camera.direction
-            dot = normal.dot view_dir
-            ccw = dot > 0
-           # puts "dot = #{dot}, ccw = #{ccw}"
-            if ccw
-              normal.reverse!
-              temp=vec1
-              vec1=vec2
-              vec2=temp
-            end
-##---SLB
+
 ##+++JWM
             # Check orientation of text_posn relative to vertex, in camera's view.
             # Returned values are X from left to right (in pixels, approximately) and
@@ -495,7 +509,7 @@ module JWMPlugins
             else
               # Text is rotated outside dimension lines - recalculate where text center will be after dimension group is relocated to vertex
               transform_text_center = Geom::Transformation.rotation @pts[1], normal,  -0.5*(angle + text_gap_angle)
-              pt_text_center = edge_bisector[1].transform! transform_text_center
+              pt_text_center = edge_bisector[1].transform transform_text_center
             end
 
 
