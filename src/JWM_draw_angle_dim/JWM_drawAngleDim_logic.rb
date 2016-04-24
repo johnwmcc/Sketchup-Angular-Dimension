@@ -17,6 +17,7 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.11 - Outside angle arcs and arrowheads correctly drawn, and text correctly placed but incorrectly oriented wrt screen
 #      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
 #                 external text for small angles is put - it goes at the first picked end
 #      v4.09 - Text that won't fit in dimension angle now correctly positioned and oriented at start
@@ -354,6 +355,44 @@ module JWMPlugins
         jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
         make_arrowhead(@arrow_style, jwm_arrowhead)
       end
+
+        ## Draw angle text in 3D text, inside a group, at the origin
+          # Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean),
+          #   letter_height, tolerance, z, is_filled (Boolean), extrusion
+          # You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
+          #   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value
+          #   is overwritten by the move]
+          # Could also move text_group as a whole up - may try that later
+
+          text_group = ents.add_group
+          if !@inside
+            text = text2
+          end
+          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0, false, 0.0
+          # Colo(u)r the text black (optional - can cause Z-fighting in display)
+          #text_group.material = "black"
+
+          # Find the centre, width and height of the text group from its bounding box (bb_height may be bigger than letter_height)
+          text_bb_center = text_group.local_bounds.center
+          text_bb_width = text_group.local_bounds.width
+          text_bb_height = text_group.local_bounds.height
+
+
+          # Oversimple calculation leaves room for text in any orientation, but sometimes too much room
+          # text_gap_angle = 2.0 * Math::atan(0.5*text_bb_width/@radius)
+
+          text_gap_angle = space_for_text(angle, @radius, nil, text_bb_center, text_bb_width, text_bb_height)
+          # puts text_gap_angle.radians.round(1).to_s
+
+
+          # Put in angle delimiter lines at origin
+          ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
+          ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
+
+          ## Scale the arrowheads to desired size
+          arrow_size_scale = Geom::Transformation.scaling @arrow_scale*@radius
+          # puts "arrow arrow_size_scale = #{@arrow_scale*@radius}"
+
 ##---JWM
 
       if(@inside)
@@ -366,34 +405,11 @@ module JWMPlugins
 ## To get text orientation and placement correct, we first have to work out where it would go, before drawing anything
 
       #----------------- Work out where to put text
-        ## Draw angle text in 3D text, inside a group, at the origin
-          # Parameters are string, alignment, font name, is_bold (Boolean), is_italic (Boolean),
-          #   letter_height, tolerance, z, is_filled (Boolean), extrusion
-          # You could set the Z plane for the text a small amount up, to avoid z-fighting with any face it's drawn over,
-          #   but it's hard to see what level to put it at, so zero for the moment. [And in any case, any non-zero value
-          #   is overwritten by the move]
-          # Could also move text_group as a whole up - may try that later
-
-          text_group = ents.add_group
-          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 1.0, false, 0.0
-          # Colo(u)r the text black (optional - can cause Z-fighting in display)
-          #text_group.material = "black"
-
-          # Find the centre, width and height of the text group from its bounding box (bb_height may be bigger than letter_height)
-          text_bb_center = text_group.local_bounds.center
-          text_bb_width = text_group.local_bounds.width
-          text_bb_height = text_group.local_bounds.height
-
 
           ## Work out how to draw dimension arc in two parts to leave a gap for the dimension text
           ## Might want to make the gap just a little bigger than text width, if text aligns with arc,
           ## but for the moment, leave it at width
 
-          # Oversimple calculation leaves room for text in any orientation, but sometimes too much room
-          # text_gap_angle = 2.0 * Math::atan(0.5*text_bb_width/@radius)
-
-          text_gap_angle = space_for_text(angle, @radius, nil, text_bb_center, text_bb_width, text_bb_height)
-          # puts text_gap_angle.radians.round(1).to_s
 
         ## Draw the arcs, arrowheads and text all at the origin first,
         ## then move all at once to dimensioned angle
@@ -423,9 +439,7 @@ module JWMPlugins
 
       #----------------- Calculate transforms to put dimensions in the right place
         ## Have to calculate all the transforms first, to insert component instance in the right place
-        ## Scale the arrowheads to desired size
-          arrow_size_scale = Geom::Transformation.scaling @arrow_scale*@radius
-          # puts "arrow arrow_size_scale = #{@arrow_scale*@radius}"
+
 
 
       #----------------- Will dimension arrows fit between dimension lines?
@@ -446,9 +460,6 @@ module JWMPlugins
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
           arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
-          # Put in angle delimiter lines at origin
-          ents.add_edges [@dim_line_scale*@radius, 0, 0], ORIGIN
-          ents.add_edges ORIGIN, [@dim_line_scale*@radius*Math::cos(angle), @dim_line_scale*@radius*Math::sin(angle), 0]
 
       #-----------------  Will text fit between dimension lines?
         if text_will_fit
@@ -515,7 +526,7 @@ module JWMPlugins
 
 
             pt_text_posn = view.screen_coords pt_text_center
-            puts "text position screen coords = #{pt_text_posn.x.to_int}, #{pt_text_posn.y.to_int}"
+            # puts "text position screen coords = #{pt_text_posn.x.to_int}, #{pt_text_posn.y.to_int}"
 
             # Now calculate which quadrant the vertex-to-text-centre line appears to be in the current view, and
             #   rotate text accordingly to keep it mostly upright
@@ -565,6 +576,49 @@ module JWMPlugins
             end
 
 ##---JWM
+
+
+      else
+        # exterior angle mode
+#         arc2 = ents.add_arc @pts[1], vec1, normal, @radius, 0,-complement, 30
+#         leader_point2 = arc2[15].start.position
+#         t2 = ents.add_text text2,leader_point2,bisector.reverse
+#         t2.leader_type = 1
+
+        # Draw arcs
+          dim_will_fit = true
+          text_will_fit = true
+
+        # Double the arc segments for outside angles to give smoother arcs
+          arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, - 0.5*(complement - text_gap_angle), 2*@arc_segments
+          arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, - 0.5*(complement + text_gap_angle),  - complement, 2*@arc_segments
+
+        # Draw arrowheads
+          arrow1_rotn = -90.degrees
+          arrow2_rotn = 90.degrees + angle
+
+          arrow1_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow1_rotn
+          arrow2_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow2_rotn
+          arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
+          arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
+
+        # Combine transformations to insert an arrowhead at start and end of arcs
+          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
+          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
+
+      #  Move the center of the text to the center of the dimension arc ...
+          text_center = Geom::Point3d.new [@radius*Math::cos(0.5*complement), -@radius*Math::sin(0.5*complement),0]
+          #puts "text_center = " + text_center.to_s
+          ents.add_cpoint text_center
+          text_posn = text_center - text_bb_center
+          text_group.move! text_posn
+        # ... and rotate it in line with middle of arc
+        # puts "normal = " + normal.to_s
+          text_rotn1 = -(90.degrees - 0.5*complement)
+          text_rotate1 = Geom::Transformation.rotation text_center, Z_AXIS , text_rotn1
+          text_group.transform! text_rotate1
+      end
+
 ##+++SLB
       #----------------- Calculate overall transformation to move dimension group to picked vertex in correct orientation
             # Unit vectors for where we want the x,y,z axes of the group drawn
@@ -599,14 +653,6 @@ module JWMPlugins
 
 ##---JWM
 
-
-      else
-        # exterior angle mode
-        arc2 = ents.add_arc @pts[1], vec1, normal, @radius, 0,-complement, 30
-        leader_point2 = arc2[15].start.position
-        t2 = ents.add_text text2,leader_point2,bisector.reverse
-        t2.leader_type = 1
-      end
 
       # tell undo the end of the bundled operation
       model.commit_operation
