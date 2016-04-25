@@ -14,9 +14,11 @@
 # Copyright 2005, Didier Bur, which, in turn, was based on the demo
 # rectangle.rb by @Last Software.
 # LanguageHandler added by Mario Chabot 2016. www.formation-sketchup.quebec
+# 3D text on dimensioned angle plane added by John McClenahan 2016 john.mcclenahan@gmail.com
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.12 - Outside angles working properly, including text angle
 #      v4.11 - Outside angle arcs and arrowheads correctly drawn, and text correctly placed but incorrectly oriented wrt screen
 #      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
 #                 external text for small angles is put - it goes at the first picked end
@@ -472,7 +474,8 @@ module JWMPlugins
           text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
-          text_rotn1 = -(90.degrees - 0.5*angle)
+
+            text_rotn1 = 0.5*angle - 90.degrees
 
         else # text won't fit - have to put it outside dimension, as well as the arcs and arrowheads
         #  Move the center of the text outside the dimension arc ...
@@ -534,46 +537,30 @@ module JWMPlugins
             diff_y = (pt_text_posn.y - pt_vertex.y)
 
             if diff_y < 0 && diff_y.abs > diff_x.abs # vertex to text center points in northerly quadrant (angle between +45  and +135 degrees)
-                if text_will_fit
-                # no rotation required
-                else
-                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, -90.degrees
-                  text_group.transform! text_rotate2
-                end
-#               puts "northerly"
-            end
-
-            if diff_y >= 0 && diff_y.abs > diff_x.abs # vertex to text center points in southerly quadrant (angle between -45 and -135)
-              if text_will_fit
-                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 180.degrees
-                text_group.transform! text_rotate2
-              else
-                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 90.degrees
-                  text_group.transform! text_rotate2
-              end
-#               puts "southerly"
+               # no rotation required
+              rotation = 0.degrees
+#              puts "northerly"
             end
 
             if diff_x < 0 && diff_y.abs <= diff_x.abs # vertex to text center points in westerly quadrant (angle between +135 and -135)
-              if text_will_fit
-                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, -90.degrees
-                text_group.transform! text_rotate2
-              else
-                  text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 180.degrees
-                  text_group.transform! text_rotate2
-              end
-#               puts "westerly"
+              rotation = - 90.degrees
+#              puts "westerly"
+            end
+            if diff_y >= 0 && diff_y.abs > diff_x.abs # vertex to text center points in southerly quadrant (angle between -45 and -135)
+              rotation = 180.degrees
+#              puts "southerly"
             end
 
             if diff_x >= 0 && diff_y.abs <= diff_x.abs #  vertex to text center points in easterly quadrant (angle between +135 and -135)
-              if text_will_fit
-                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, 90.degrees
-                text_group.transform! text_rotate2
-              else
-                # no rotation required
-              end
-#               puts "easterly"
+              rotation = 90.degrees
+#              puts "easterly"
             end
+
+          if !text_will_fit
+            rotation = rotation - 90.degrees
+          end
+            text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, rotation
+            text_group.transform! text_rotate2
 
 ##---JWM
 
@@ -614,9 +601,57 @@ module JWMPlugins
           text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
-          text_rotn1 = -(90.degrees - 0.5*complement)
+          text_rotn1 =  0.5*angle + 90.degrees
           text_rotate1 = Geom::Transformation.rotation text_center, Z_AXIS , text_rotn1
           text_group.transform! text_rotate1
+##+++JWM
+            # Check orientation of text_posn relative to vertex, in camera's view.
+            # Returned values are X from left to right (in pixels, approximately) and
+            #   Y values measured from TOP to BOTTOM (reverse of normal Y axis direction)
+            view = Sketchup.active_model.active_view
+            pt_vertex = view.screen_coords @pts[1]
+            # Calculate final text position near vertex from angle bisector, and rotation if text is outside dimension
+            if text_will_fit
+              pt_text_center = edge_bisector[1]
+            else
+              # Text is rotated outside dimension lines - recalculate where text center will be after dimension group is relocated to vertex
+              transform_text_center = Geom::Transformation.rotation @pts[1], normal,  -0.5*(angle + text_gap_angle)
+              pt_text_center = edge_bisector[1].transform transform_text_center
+            end
+
+
+
+            pt_text_posn = view.screen_coords pt_text_center
+            # puts "text position screen coords = #{pt_text_posn.x.to_int}, #{pt_text_posn.y.to_int}"
+
+            # Now calculate which quadrant the vertex-to-text-centre line appears to be in the current view, and
+            #   rotate text accordingly to keep it mostly upright
+            diff_x = (pt_text_posn.x - pt_vertex.x)
+            diff_y = (pt_text_posn.y - pt_vertex.y)
+
+            if diff_y < 0 && diff_y.abs > diff_x.abs # vertex to text center points in northerly quadrant (angle between +45  and +135 degrees)
+              rotation = -180.degrees
+#              puts "northerly"
+            end # if
+
+            if diff_x < 0 && diff_y.abs <= diff_x.abs # vertex to text center points in westerly quadrant (angle between +135 and -135)
+              rotation = 90.degrees
+#              puts "westerly"
+            end
+
+            if diff_y >= 0 && diff_y.abs > diff_x.abs # vertex to text center points in southerly quadrant (angle between -45 and -135)
+              rotation = 0.degrees
+#              puts "southerly"
+            end
+
+            if diff_x >= 0 && diff_y.abs <= diff_x.abs #  vertex to text center points in easterly quadrant (angle between +135 and -135)
+              rotation = -90.degrees
+#              puts "easterly"
+            end
+                text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, rotation
+                text_group.transform! text_rotate2
+##---JWM
+
       end
 
 ##+++SLB
