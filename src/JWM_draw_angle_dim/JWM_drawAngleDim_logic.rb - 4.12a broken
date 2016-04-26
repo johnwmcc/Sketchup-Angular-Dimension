@@ -18,9 +18,6 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
-#      v4.13 - ALMOST there, with arrowhead selectable by changing value of @arrow_style. BUT each time you select the tool,
-#                 no arrowhead is drawn for the first dimension, but there's no error. Works fine on second and subsequent uses in
-#                 same session of using the tool. I wonder if jwm_arrowhead needs to be an instance variable?
 #      v4.12 - Outside angles working properly, including text angle
 #      v4.11 - Outside angle arcs and arrowheads correctly drawn, and text correctly placed but incorrectly oriented wrt screen
 #      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
@@ -98,7 +95,7 @@ module JWMPlugins
     # Arc segments for dimension arcs
         @arc_segments = 12
     # Arrow style closed, open, slash, dot or none?
-      @arrow_style = "open"
+      @arrow_style = "closed"
   #Create arrowheads if that hasn't already been done
       if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
         jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
@@ -108,7 +105,6 @@ module JWMPlugins
       styles.each{ |arrow_style|
         make_arrowhead(arrow_style, jwm_arrowhead)
         }
-      use_arrowhead(@arrow_style,jwm_arrowhead)
 ##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
@@ -198,42 +194,42 @@ module JWMPlugins
       case arrow_style # Set in initialize as closed, open, line, dot or none
 
       when "closed"
-        if !@dim_angle_aro_closed = Sketchup.active_model.definitions["dim_angle_aro_closed"]
-          @dim_angle_aro_closed = Sketchup.active_model.definitions.add("dim_angle_aro_closed")
+        if !dim_angle_aro_closed = Sketchup.active_model.definitions["dim_angle_aro_closed"]
+          dim_angle_aro_closed = Sketchup.active_model.definitions.add("dim_angle_aro_closed")
         end
-        arrow_face = @dim_angle_aro_closed.entities.add_face(arrow_points)
+        arrow_face = dim_angle_aro_closed.entities.add_face(arrow_points)
         # If the  blue face is pointing up, reverse it.
         arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
 
       when "open"
-        if !@dim_angle_aro_open = Sketchup.active_model.definitions["dim_angle_aro_open"]
-          @dim_angle_aro_open = Sketchup.active_model.definitions.add("dim_angle_aro_open")
+        if !dim_angle_aro_open = Sketchup.active_model.definitions["dim_angle_aro_open"]
+          dim_angle_aro_open = Sketchup.active_model.definitions.add("dim_angle_aro_open")
         end
-        arrow_lines = @dim_angle_aro_open.entities.add_edges arrow_points
+        arrow_lines = dim_angle_aro_open.entities.add_edges arrow_points
 
       when "slash"
-        if !@dim_angle_aro_slash = Sketchup.active_model.definitions["dim_angle_aro_slash"]
-          @dim_angle_aro_slash = Sketchup.active_model.definitions.add("dim_angle_aro_slash")
+        if !dim_angle_aro_slash = Sketchup.active_model.definitions["dim_angle_aro_slash"]
+          dim_angle_aro_slash = Sketchup.active_model.definitions.add("dim_angle_aro_slash")
         end
         arrow_points[0] = [0.5, -0.5, 0]
         arrow_points[1] = ORIGIN
         arrow_points[2] = [-0.5,  0.5, 0]
-        arrow_lines = @dim_angle_aro_slash.entities.add_edges arrow_points
+        arrow_lines = dim_angle_aro_slash.entities.add_edges arrow_points
 
       when "dot"
-        if !@dim_angle_aro_dot = Sketchup.active_model.definitions["dim_angle_aro_dot"]
-          @dim_angle_aro_dot = Sketchup.active_model.definitions.add("dim_angle_aro_dot")
+        if !dim_angle_aro_dot = Sketchup.active_model.definitions["dim_angle_aro_dot"]
+          dim_angle_aro_dot = Sketchup.active_model.definitions.add("dim_angle_aro_dot")
         end
-        arrow_dot = @dim_angle_aro_dot.entities.add_circle([0,0,0], Z_AXIS, 0.1, 12)
-        arrow_face = @dim_angle_aro_dot.entities.add_face(arrow_dot)
+        arrow_dot = dim_angle_aro_dot.entities.add_circle([0,0,0], Z_AXIS, 0.1, 12)
+        arrow_face = dim_angle_aro_dot.entities.add_face(arrow_dot)
 
       when "none"
-        if !@dim_angle_aro_none = Sketchup.active_model.definitions["dim_angle_aro_none"]
-          @dim_angle_aro_none = Sketchup.active_model.definitions.add("dim_angle_aro_none")
+        if !dim_angle_aro_none = Sketchup.active_model.definitions["dim_angle_aro_none"]
+          dim_angle_aro_none = Sketchup.active_model.definitions.add("dim_angle_aro_none")
         end
         # have to have something in the component to allow it to be created (I think)
         # You can turn guides off, or maybe I can make this hidden?
-        arrow_lines = @dim_angle_aro_none.entities.add_cpoint arrow_points[1]
+        arrow_lines = dim_angle_aro_none.entities.add_cpoint arrow_points[1]
 
       else
         UI.messagebox "Sorry that #{arrow_style} is not a valid arrow type. \nPlease edit the script and initialize @arrow_style"
@@ -251,15 +247,11 @@ module JWMPlugins
     def use_arrowhead(arrow_style, arrowhead)
       case arrow_style
       when "closed"
-        arrowhead = @dim_angle_aro_closed
+        arrowhead = dim_angle_aro_closed
       when "open"
-        arrowhead = @dim_angle_aro_open
       when "slash"
-        arrowhead = @dim_angle_aro_slash
       when "dot"
-        arrowhead = @dim_angle_aro_dot
       when "none"
-        arrowhead = @dim_angle_aro_none
       else
         UI.messagebox "Sorry that #{arrow_style} is not a valid arrow type. \nPlease edit the script and initialize @arrow_style"
       end # case arrow_style
@@ -514,7 +506,7 @@ module JWMPlugins
         arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
         if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-           jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
+           jwm_arrowhead = use_arrowhead(@arrow_style)
         end
 
         # Combine transformations to insert an arrowhead at start and end of arcs
@@ -586,6 +578,8 @@ module JWMPlugins
               pt_text_center = edge_bisector[1].transform transform_text_center
             end
 
+
+
             pt_text_posn = view.screen_coords pt_text_center
             # puts "text position screen coords = #{pt_text_posn.x.to_int}, #{pt_text_posn.y.to_int}"
 
@@ -645,9 +639,6 @@ module JWMPlugins
           arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-        if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-           jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
-        end
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
           arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
@@ -662,7 +653,6 @@ module JWMPlugins
           text_rotn1 =  0.5*angle + 90.degrees
           text_rotate1 = Geom::Transformation.rotation text_center, Z_AXIS , text_rotn1
           text_group.transform! text_rotate1
-
 ##+++JWM
             # Check orientation of text_posn relative to vertex, in camera's view.
             # Returned values are X from left to right (in pixels, approximately) and
@@ -708,8 +698,6 @@ module JWMPlugins
 
             text_rotate2 = Geom::Transformation.rotation text_center, Z_AXIS, rotation
             text_group.transform! text_rotate2
-      end # if @inside/else outside angle
-
 ##---JWM
 
 ##+++SLB
