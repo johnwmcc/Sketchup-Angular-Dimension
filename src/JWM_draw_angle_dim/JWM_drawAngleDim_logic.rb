@@ -18,9 +18,7 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
-#      v4.13 - ALMOST there, with arrowhead selectable by changing value of @arrow_style. BUT each time you select the tool,
-#                 no arrowhead is drawn for the first dimension, but there's no error. Works fine on second and subsequent uses in
-#                 same session of using the tool. I wonder if jwm_arrowhead needs to be an instance variable?
+#      v4.13 - Arrowhead now selectable simply by changing value of @arrow_style in initialize function
 #      v4.12 - Outside angles working properly, including text angle
 #      v4.11 - Outside angle arcs and arrowheads correctly drawn, and text correctly placed but incorrectly oriented wrt screen
 #      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
@@ -513,9 +511,9 @@ module JWMPlugins
         arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
         arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
-        if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
+ #       if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
            jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
-        end
+#        end
 
         # Combine transformations to insert an arrowhead at start and end of arcs
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
@@ -645,9 +643,9 @@ module JWMPlugins
           arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-        if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
+#        if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
            jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
-        end
+#        end
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
           arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
