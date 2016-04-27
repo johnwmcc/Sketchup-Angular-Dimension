@@ -18,7 +18,14 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.14 - Filled text black, and lifted it 0.005 * @radius off dimension plane to reduce z-fighting if on face.
+#                 Have also filled closed arrow black, but left it on surface. Lifting it displays poorly from some angles
+#                 - noticeably out of line with arc end.
+#                 Could perhaps stop arc short at middle of arrowhead for closed arrow only?
+#                 Added right angle lines, and hid arcs, arrowheads and text for right angles. Not sure how to scale
+#                   the lines, and/or whether to keep text displayed instead of hidden
 #      v4.13 - Arrowhead now selectable simply by changing value of @arrow_style in initialize function
+#                 (but may need to restart SU?)
 #      v4.12 - Outside angles working properly, including text angle
 #      v4.11 - Outside angle arcs and arrowheads correctly drawn, and text correctly placed but incorrectly oriented wrt screen
 #      v4.10 - Text that won't fit in dimension angle correctly positioned and oriented, AND you can choose which side of the angle
@@ -202,7 +209,8 @@ module JWMPlugins
         arrow_face = @dim_angle_aro_closed.entities.add_face(arrow_points)
         # If the  blue face is pointing up, reverse it.
         arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
-
+        # Fill arrowhead, and move it up slightly to avoid z-fighting on a face
+        arrow_face.material = "black"
       when "open"
         if !@dim_angle_aro_open = Sketchup.active_model.definitions["dim_angle_aro_open"]
           @dim_angle_aro_open = Sketchup.active_model.definitions.add("dim_angle_aro_open")
@@ -422,9 +430,9 @@ module JWMPlugins
           if !@inside
             text = text2
           end
-          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0, false, 0.0
+          t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0, true, 0.0
           # Colo(u)r the text black (optional - can cause Z-fighting in display)
-          #text_group.material = "black"
+          text_group.material = "black"
 
           # Find the centre, width and height of the text group from its bounding box (bb_height may be bigger than letter_height)
           text_bb_center = text_group.local_bounds.center
@@ -478,18 +486,22 @@ module JWMPlugins
       #----------------- Draw arcs
         #  Draw the arcs, number of segments as specified in initialize function
           # parameters are centerpoint, X-axis, normal, radius, start angle, end angle
+          arcs_group = ents.add_group
+          arc_ents = arcs_group.entities
           if dim_will_fit
             text_will_fit = true
-            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, 0.5*(angle - text_gap_angle), @arc_segments
-            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0.5*(angle + text_gap_angle), angle, @arc_segments
+            arc1 = arc_ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, 0.5*(angle - text_gap_angle), @arc_segments
+            arc2 = arc_ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0.5*(angle + text_gap_angle), angle, @arc_segments
           else
-            arc1 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, - arrowhead_angle, 4
-            arc2 = ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, angle + arrowhead_angle, angle, 4
+            arc1 = arc_ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, 0, - arrowhead_angle, 4
+            arc2 = arc_ents.add_arc ORIGIN, X_AXIS, Z_AXIS, @radius, angle + arrowhead_angle, angle, 4
             # See if text will fit, even though whole dimension won't
             if 1.05*text_gap_angle < angle
               text_will_fit = true
             end
           end
+
+
 
       #----------------- Calculate transforms to put dimensions in the right place
         ## Have to calculate all the transforms first, to insert component instance in the right place
@@ -508,6 +520,8 @@ module JWMPlugins
 
         arrow1_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow1_rotn
         arrow2_rotate = Geom::Transformation.rotation ORIGIN, Z_AXIS, arrow2_rotn
+
+        # Move to start/end of arcs and raise slightly if closed arrowhead style
         arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
         arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
@@ -516,18 +530,37 @@ module JWMPlugins
 #        end
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
-          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
+          arrow1 = arc_ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
+          arrow2 = arc_ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
+      #-----------------
+      # Check if right angle
+      if angle <= 90.01.degrees && angle >= 89.99.degrees # Check if right angle (== 90.degrees doesn't work)
+            # Draw two straight lines at right angles at vertex
+            # Calculate scale factor to get the lines proportional to gap between vertex and edge of text
+            ra_scale = 0.67*@radius - 0.5*text_bb_width
+            right_angle = []
+            right_angle[0] = [ra_scale,0,0]
+            right_angle[1] = [ra_scale,ra_scale,0]
+            right_angle[2] = [0,ra_scale,0]
+            ents.add_edges right_angle
+        # hide arcs, arrowheads (?and text)
 
+          arcs_group.hidden= true
+
+          arrow1.hidden= true
+          arrow2.hidden= true
+
+          text_group.hidden= true
+      end
       #-----------------  Will text fit between dimension lines?
         if text_will_fit
           #  Move the center of the text to the center of the dimension arc ...
           text_center = Geom::Point3d.new [@radius*Math::cos(0.5*angle), @radius*Math::sin(0.5*angle),0]
           #puts "text_center = " + text_center.to_s
-          ents.add_cpoint text_center
-
-          text_posn = text_center - text_bb_center
+          # ents.add_cpoint text_center
+        # Move text to text center, and lift text slightly above dimension plane, to avoid z-fighting if on a face
+          text_posn = text_center - text_bb_center + [0, 0, 0.005*@radius]
           text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
@@ -544,10 +577,10 @@ module JWMPlugins
           # or at the other end of the dimension arc (counterclockwise from start)
             text_center = Geom::Point3d.new [@radius*Math::cos(angle + 0.5*text_gap_angle + arrowhead_angle), @radius*Math::sin(angle + 0.5*text_gap_angle + arrowhead_angle),0]
           end #if ccw
-          ents.add_cpoint text_center
+          # ents.add_cpoint text_center
 
           text_posn = text_center - text_bb_center
-          text_group.move! text_posn
+          text_group.move! text_posn + [0, 0, 0.005*@radius]
 
         # ... and rotate it in line with the arc
         # puts "normal = " + normal.to_s
@@ -622,7 +655,7 @@ module JWMPlugins
 
 ##---JWM
 
-
+#=========================
       else  # we're dimensioning an exterior angle
 
         # Draw arcs
@@ -643,9 +676,9 @@ module JWMPlugins
           arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-#        if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-           jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
-#        end
+
+          jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
+
           arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
           arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
 
@@ -653,7 +686,7 @@ module JWMPlugins
           text_center = Geom::Point3d.new [@radius*Math::cos(0.5*complement), -@radius*Math::sin(0.5*complement),0]
           #puts "text_center = " + text_center.to_s
           ents.add_cpoint text_center
-          text_posn = text_center - text_bb_center
+          text_posn = text_center - text_bb_center + [0, 0, 0.005*@radius]
           text_group.move! text_posn
         # ... and rotate it in line with middle of arc
         # puts "normal = " + normal.to_s
