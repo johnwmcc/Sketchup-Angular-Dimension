@@ -19,7 +19,7 @@
 
 ##++JWM Logic version history
 #      v4.14 - Filled text black, and lifted it 0.005 * @radius off dimension plane to reduce z-fighting if on face.
-#                 Have also filled closed arrow black, but left it on surface. Lifting it displays poorly from some angles
+#                 Have also filled closed arrow black, but left it on surface. Lifting it disp lays poorly from some angles
 #                 - noticeably out of line with arc end.
 #                 Could perhaps stop arc short at middle of arrowhead for closed arrow only?
 #                 Added right angle lines, and hid arcs, arrowheads and text for right angles. Not sure how to scale
@@ -105,15 +105,15 @@ module JWMPlugins
     # Arrow style closed, open, slash, dot or none?
       @arrow_style = "open"
   #Create arrowheads if that hasn't already been done
-      if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-        jwm_arrowhead = Sketchup.active_model.definitions.add("jwm_arrowhead")
+      if !dim_angle_arrow = Sketchup.active_model.definitions["dim_angle_arrow"]
+        dim_angle_arrow = Sketchup.active_model.definitions.add("dim_angle_arrow")
       end
 
       styles = ["closed", "open", "slash", "dot", "none"]
       styles.each{ |arrow_style|
-        make_arrowhead(arrow_style, jwm_arrowhead)
+        make_arrowhead(arrow_style, dim_angle_arrow)
         }
-      use_arrowhead(@arrow_style,jwm_arrowhead)
+      use_arrowhead(@arrow_style,dim_angle_arrow)
 ##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
@@ -251,7 +251,7 @@ module JWMPlugins
         # To add the component directly to the model, you have to define a transformation. We can define
         # a transformation that does nothing to just get the job done.
         # trans = Geom::Transformation.new  # an empty, default transformation.
-        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(jwm_arrowhead, trans)
+        # arro_comp_inst = Sketchup.active_model.active_entities.add_instance(dim_angle_arrow, trans)
     end # make_arrowhead
 #-----------------------------------------------------------------------------
     def use_arrowhead(arrow_style, arrowhead)
@@ -525,13 +525,13 @@ module JWMPlugins
         arrow1_move = Geom::Transformation.translation ORIGIN.vector_to arc1[0].start.position
         arrow2_move = Geom::Transformation.translation ORIGIN.vector_to arc2[-1].end.position
 
- #       if !jwm_arrowhead = Sketchup.active_model.definitions["jwm_arrowhead"]
-           jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
+ #       if !dim_angle_arrow = Sketchup.active_model.definitions["dim_angle_arrow"]
+           dim_angle_arrow = use_arrowhead(@arrow_style, dim_angle_arrow)
 #        end
 
         # Combine transformations to insert an arrowhead at start and end of arcs
-          arrow1 = arc_ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
-          arrow2 = arc_ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
+          arrow1 = arc_ents.add_instance dim_angle_arrow, arrow1_move*arrow1_rotate*arrow_size_scale
+          arrow2 = arc_ents.add_instance dim_angle_arrow, arrow2_move*arrow2_rotate*arrow_size_scale
 
       #-----------------
       # Check if right angle
@@ -677,10 +677,10 @@ module JWMPlugins
 
         # Combine transformations to insert an arrowhead at start and end of arcs
 
-          jwm_arrowhead = use_arrowhead(@arrow_style, jwm_arrowhead)
+          dim_angle_arrow = use_arrowhead(@arrow_style, dim_angle_arrow)
 
-          arrow1 = ents.add_instance jwm_arrowhead, arrow1_move*arrow1_rotate*arrow_size_scale
-          arrow1 = ents.add_instance jwm_arrowhead, arrow2_move*arrow2_rotate*arrow_size_scale
+          arrow1 = ents.add_instance dim_angle_arrow, arrow1_move*arrow1_rotate*arrow_size_scale
+          arrow1 = ents.add_instance dim_angle_arrow, arrow2_move*arrow2_rotate*arrow_size_scale
 
       #  Move the center of the text to the center of the dimension arc ...
           text_center = Geom::Point3d.new [@radius*Math::cos(0.5*complement), -@radius*Math::sin(0.5*complement),0]
