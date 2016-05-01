@@ -79,14 +79,14 @@ module JWMPlugins
   DangLH = LanguageHandler.new('draw_angle_dim.strings')
 
   # Load the extension.
-  extension_name = DangLH['Draw_angle_dim']
+  extension_name = DangLH['Draw_angle_dim_jwm']
 
   path = File.dirname(__FILE__).freeze
   loader = File.join(path, 'JWM_draw_angle_dim', 'JWM_drawAngleDim_menu.rb')
   extension = SketchupExtension.new(extension_name, loader)
   extension.description = (DangLH['Create an angle dimension with']) + "\n" +
                           (DangLH[' arc and text in a new group.'])
-  extension.version = '4.14'
+  extension.version = '4.04'
   extension.creator = 'Stephen Baumgartner and John McClenahan'
   extension.copyright = '2016, steve@slbaumgartner.com.'
 
