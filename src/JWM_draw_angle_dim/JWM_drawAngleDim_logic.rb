@@ -18,6 +18,8 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.21 - JWM added feedback geometry with point(s) and one or two lines
+#      v4.20 - SLBs first code cleanup
 #      v4.14 - Filled text black, and lifted it 0.005 * @radius off dimension plane to reduce z-fighting if on face.
 #                 Have also filled closed arrow black, but left it on surface. Lifting it disp lays poorly from some angles
 #                 - noticeably out of line with arc end.
@@ -95,7 +97,7 @@ module JWMPlugins
       ##+++JWM
       # Text size as a fraction of @radius - default, 0.1. Or user can set fixed height
       @user_text_height = -1
-      @text_scale = 0.05
+      @text_scale = 0.08
       # Dimension line scale as fraction of radius
       @dim_line_scale = 1.05
       # Arrowhead length as fraction of @radius
@@ -104,7 +106,7 @@ module JWMPlugins
       @arc_segments = 12
       # Arrow style closed, open, slash, dot or none?
       @arrow_style = "open"
-      
+
       # Inialize refs to component definitions for the available styles.
       # If already existing in the model, reuse the definition.  Otherwise
       # wait until a style is actually used before creating it (these initializations
@@ -114,7 +116,7 @@ module JWMPlugins
       @dim_angle_aro_slash = Sketchup.active_model.definitions["dim_angle_aro_slash"]
       @dim_angle_aro_dot = Sketchup.active_model.definitions["dim_angle_aro_dot"]
       @dim_angle_aro_none = Sketchup.active_model.definitions["dim_angle_aro_none"]
-      
+
       ##---JWM
       # tab key toggles between drawing inside and outside angle dimension
       @inside = true
@@ -359,7 +361,7 @@ module JWMPlugins
         normal.reverse!
         vec1,vec2 = vec2, vec1
       end
-      
+
       edge_bisector = []
       edge_bisector[0] = @pts[1]
       edge_bisector[1] = @pts[1].offset bisector
@@ -619,7 +621,7 @@ module JWMPlugins
       # orientation of the z axis of the dimension as drawn at the origin.
       # This uses the (poorly documented) representation of a Transformation
       # as a 4x4 array in the SketchUp Ruby API.
-      
+
       newx = vec1.normalize
       newz = normal
       newy = newz.cross(newx).normalize
@@ -686,7 +688,7 @@ module JWMPlugins
       end
 
     end
-    
+
     #-----------------------------------------------------------------------------
     # advance to the next state and set the status texts appropriately.
     def increment_state
@@ -755,6 +757,21 @@ module JWMPlugins
     def draw(view)
       view.tooltip = @ip.tooltip
       @ip.draw view
+
+      if @state != 0 && @state < 3
+        if( @ip1.valid? )
+          @ip1.draw(view) if( @ip1.display? )
+          # The set_color_from_line method determines what color
+          # to use to draw a line based on its direction.  For example
+          # red, green or blue.
+          # view.set_color_from_line(@ip, @ip1)
+          self.draw_geometry(@ip.position, @ip1.position, view)
+          @drawn = true
+        end
+      else
+        @first_pick_pt = nil
+        reset
+      end
     end
     #-----------------------------------------------------------------------------
     def onSetCursor
@@ -794,6 +811,21 @@ module JWMPlugins
     #-----------------------------------------------------------------------------
     # def onKeyUp(key, rpt, flags, view)
     # end
+    #-----------------------------------------------------------------------------
+    # Draw temporary geometry as visual feedback
+    def draw_geometry(pt1, pt2, view)
+      view.drawing_color = "cyan"
+      view.line_width = 2.0
+
+      if @first_pick_pt
+        view.draw_lines(pt1,pt2, pt2,@first_pick_pt)
+        # Parameters of view.draw_points are [points array], point size (px), point style (1-7), colo(u)r
+        view.draw_points [@first_pick_pt, pt2], 10, 1, "cyan"
+      else
+        view.draw_line(pt1, pt2)
+        @first_pick_pt = pt2
+      end
+    end
 
   end # class DrawAngleDimTool
   #-----------------------------------------------------------------------------
