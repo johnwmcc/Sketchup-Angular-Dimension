@@ -826,12 +826,12 @@ module JWMPlugins
         value = text.to_l
       rescue
         # Error parsing the text
-        UI.messagebox("please enter a number for arc radius")
+        UI.messagebox("please enter a valid length value for arc radius")
         value = nil
         Sketchup::set_status_text "", SB_VCB_VALUE
       end
       if(value <= 0.0)
-        UI.messagebox("arc radius must be a positive number")
+        UI.messagebox("arc radius must be a positive length value")
         value = nil
         Sketchup::set_status_text "", SB_VCB_VALUE
       end
