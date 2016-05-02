@@ -3,7 +3,7 @@
 module JWMPlugins
 
   if !file_loaded?(__FILE__)
-    cmd = UI::Command.new((DangLH['Angular Dimension'])) {require_relative('JWM_drawAngleDim_logic.rb')
+    cmd = UI::Command.new((DangLH['Angular Dimension (JWM)'])) {require_relative('JWM_drawAngleDim_logic.rb')
       JWMPlugins::draw_angle_dim_tool
     }
     cmd.menu_text = (DangLH['Angular Dimension (JWM)'])
@@ -21,7 +21,7 @@ module JWMPlugins
     end
     UI.menu("Tools").add_item cmd
 
-    toolbar = UI::Toolbar.new((DangLH['Angular Dimension']))
+    toolbar = UI::Toolbar.new((DangLH['Angular Dimension (JWM)']))
     toolbar.add_item(cmd)
     toolbar.restore if toolbar.get_last_state==1
   end
