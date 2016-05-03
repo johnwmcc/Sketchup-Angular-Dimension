@@ -18,6 +18,7 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.24 - User Input box works, some of the time, but causes frequent bugsplats
 #      v4.23 - Have mostly working user Inputbox triggered by R-click
 #      v4.22 - Fixed minor bug in feedback geometry, and started work on R-Click popup Input box
 #      v4.21 - JWM added feedback geometry with point(s) and one or two lines
@@ -209,9 +210,9 @@ module JWMPlugins
 
       # Draw an arrowhead component
       arrow_points = Array.new ;
-      arrow_points[0] = [1.0, -0.3, 0]
+      arrow_points[0] = [1.0, -0.3, 0.01]
       arrow_points[1] = ORIGIN ; # "ORIGIN" is a SU provided constant
-      arrow_points[2] = [1.0,  0.3, 0]
+      arrow_points[2] = [1.0,  0.3, 0.01]
 
       case arrow_style # Set in initialize as closed, open, line, dot or none
 
@@ -243,8 +244,10 @@ module JWMPlugins
       when "dot"
         if @dim_angle_aro_dot.nil? || @dim_angle_aro_dot.deleted?
           @dim_angle_aro_dot = Sketchup.active_model.definitions.add("dim_angle_aro_dot")
-          arrow_dot = @dim_angle_aro_dot.entities.add_circle([0,0,0], Z_AXIS, 0.1, 12)
+          arrow_dot = @dim_angle_aro_dot.entities.add_circle([0,0,0.01], Z_AXIS, 0.2, 12)
           arrow_face = @dim_angle_aro_dot.entities.add_face(arrow_dot)
+          arrow_face.reverse! if arrow_face.normal.z < 0  # flip face to up if facing down
+          arrow_face.material = "black"
         end
         arrowhead = @dim_angle_aro_dot
       when "none"
@@ -742,6 +745,21 @@ module JWMPlugins
           @arrow_scale = results[1]
           @text_scale = results[2]
           @user_text_height = results[3].to_l
+        end
+        sel = Sketchup.active_model.selection
+        if sel
+          sel.each {|ent|
+          if ent.is_a? (Sketchup::Group)
+            puts "entity name is #{ent.name}"
+             if ent.name.match /Angular Dimension*/
+               puts " entity name is an Angular Dimension = #{ent.name}"
+             else
+              puts "Selection isn't an Angular Dimension"
+             end
+          end
+          }
+        else
+          puts "Nothing selected"
         end
       end
     #-----------------------------------------------------------------------------
