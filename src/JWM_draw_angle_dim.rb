@@ -86,7 +86,7 @@ module JWMPlugins
   extension = SketchupExtension.new(extension_name, loader)
   extension.description = (DangLH['Create an angle dimension with']) + "\n" +
                           (DangLH[' arc and text in a new group.'])
-  extension.version = '4.21'
+  extension.version = '4.23'
   extension.creator = 'Stephen Baumgartner and John McClenahan'
   extension.copyright = '2016, steve@slbaumgartner.com.'
 

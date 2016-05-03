@@ -18,6 +18,8 @@
 #-----------------------------------------------------------------------------
 
 ##++JWM Logic version history
+#      v4.23 - Have mostly working user Inputbox triggered by R-click
+#      v4.22 - Fixed minor bug in feedback geometry, and started work on R-Click popup Input box
 #      v4.21 - JWM added feedback geometry with point(s) and one or two lines
 #      v4.20 - SLBs first code cleanup
 #      v4.14 - Filled text black, and lifted it 0.005 * @radius off dimension plane to reduce z-fighting if on face.
@@ -92,11 +94,11 @@ module JWMPlugins
       @state = 0
 
       # radius for drawn arc can be calculated by default or input via VCB
-      @user_radius = -1
+      @user_radius = -1.0
       @radius = 0
       ##+++JWM
       # Text size as a fraction of @radius - default, 0.1. Or user can set fixed height
-      @user_text_height = -1
+      @user_text_height = -1.0
       @text_scale = 0.08
       # Dimension line scale as fraction of radius
       @dim_line_scale = 1.05
@@ -381,7 +383,14 @@ module JWMPlugins
       if !@inside
         text = text2
       end
-      t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, @text_scale*@radius, 0, 0, true, 0.0
+      # Set text height either as user-fixed height, or fraction of radius
+      if @user_text_height > 0
+        text_height = @user_text_height.to_l
+      else
+        text_height = @text_scale*@radius.to_l
+      end
+
+      t = text_group.entities.add_3d_text text, TextAlignLeft, "Arial", false, false, text_height  , 0, 0, true, 0.0
       # Colo(u)r the text black (optional - can cause Z-fighting in display)
       text_group.material = "black"
 
@@ -610,6 +619,7 @@ module JWMPlugins
       show_status
     end # draw_angle_dim
 
+    #-----------------------------------------------------------------------------
     def two_vec_transformation(vec1, normal, vertex)
       # Construct a Transformation to move and orient the dimension group
       # drawn at the origin to the location and orientation of the
@@ -715,6 +725,25 @@ module JWMPlugins
       set_current_point(x, y, view)
       increment_state
     end
+    #-----------------------------------------------------------------------------
+    def onRButtonDown(flags, x, y, view)
+      getMenu()
+    end
+    #-----------------------------------------------------------------------------
+      def getMenu(menu)
+        # Display Inputbox to allow adjustment of Angular Dimension parameters
+         prompts = [ "Arrow type", "Arrow scale", "Text scale", "OR text height"]
+         defaults = [@arrow_style,  @arrow_scale,@text_scale, @user_text_height.to_l]
+         list = ["open|closed|slash|dot|none", "", "", ""]
+         results = UI.inputbox(prompts, defaults, list, "Angular Dimension settings")
+
+        if results
+          @arrow_style = results[0]
+          @arrow_scale = results[1]
+          @text_scale = results[2]
+          @user_text_height = results[3].to_l
+        end
+      end
     #-----------------------------------------------------------------------------
     def onCancel(flag, view)
       view.invalidate if @drawn
