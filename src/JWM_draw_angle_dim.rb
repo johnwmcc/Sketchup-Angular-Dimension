@@ -74,24 +74,29 @@ require 'extensions.rb'
 require 'langhandler.rb'
 
 module JWMPlugins
+  module AngularDim
 
-  # Constant for language strings swapping...
-  DangLH = LanguageHandler.new('draw_angle_dim.strings')
+    # Constant for language strings swapping...
+    DangLH = LanguageHandler.new('draw_angle_dim.strings')
 
-  # Load the extension.
-  extension_name = DangLH['Draw_angle_dim_jwm']
+    # Constants to make the code independent of the Plugins folder
+    BASEPATH = File.dirname(__FILE__).freeze
+    EXTPATH = File.join(BASEPATH, 'JWM_draw_angle_dim').freeze
+    IMGPATH = File.join(EXTPATH, 'Images').freeze
+    
+    # Load the extension.
+    extension_name = DangLH['Draw_angle_dim_jwm']
+    loader = File.join(EXTPATH, 'JWM_drawAngleDim_menu.rb')
+    extension = SketchupExtension.new(extension_name, loader)
+    extension.description = (DangLH['Create an angle dimension with']) + "\n" +
+                            (DangLH[' arc and text in a new group.'])
+    extension.version = '4.04'
+    extension.creator = 'Stephen Baumgartner and John McClenahan'
+    extension.copyright = '2016, steve@slbaumgartner.com.'
 
-  path = File.dirname(__FILE__).freeze
-  loader = File.join(path, 'JWM_draw_angle_dim', 'JWM_drawAngleDim_menu.rb')
-  extension = SketchupExtension.new(extension_name, loader)
-  extension.description = (DangLH['Create an angle dimension with']) + "\n" +
-                          (DangLH[' arc and text in a new group.'])
-  extension.version = '4.24'
-  extension.creator = 'Stephen Baumgartner and John McClenahan'
-  extension.copyright = '2016, steve@slbaumgartner.com.'
-
-  Sketchup.register_extension extension, true
-end # module
+    Sketchup.register_extension extension, true
+  end # AngularDim
+end # JWMPlugins
 
 
 
